@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { readFile } from "fs/promises"
 import { join } from "path"
-import { getModule, getSection } from "@/lib/navigation"
+import { getModule, getSection, tutorialModules } from "@/lib/navigation"
 import { compileMDXWithConfig } from "@/lib/mdx/config"
 import { SectionPageClient } from "@/components/tutorial/SectionPageClient"
 import { Callout } from "@/components/tutorial/Callout"
@@ -21,6 +21,22 @@ const mdxComponents = {
   CodeBlock,
   Collapsible,
   TerminalBlock,
+}
+
+// Generate static params for static export
+export function generateStaticParams() {
+  const params: Array<{ module: string; section: string }> = []
+
+  for (const tutorialModule of tutorialModules) {
+    for (const section of tutorialModule.sections) {
+      params.push({
+        module: tutorialModule.id,
+        section: section.slug,
+      })
+    }
+  }
+
+  return params
 }
 
 export default async function SectionPage({ params }: SectionPageProps) {
