@@ -1,0 +1,439 @@
+---
+title: Dynamic Resources
+description: Learn to create resources with parameters and templates
+---
+
+# Dynamic Resources
+
+Dynamic resources are MCP resources that can generate different content based on parameters and templates. This is powerful for creating reusable resource generators like configuration files, API clients, or documentation templates.
+
+## What Are Dynamic Resources?
+
+Dynamic resources extend the basic resource concept by:
+
+- Accepting parameters to customize output
+- Using templates for flexible content generation
+- Generating resources on-demand based on context
+
+## Basic Dynamic Resource Implementation
+
+Let's start with a simple template generator resource:
+
+```typescript
+import { z } from 'zod';
+import {
+  Resource,
+  ResourceTemplate,
+  DynamicResource,
+} from '@modelcontextprotocol/sdk/sdk';
+
+// Define the schema for our dynamic resource parameters
+const templateParams = z.object({
+  projectName: z.string().min(1, 'Project name is required'),
+  framework: z.enum(['react', 'vue', 'svelte']).default('react'),
+  typescript: z.boolean().default(true),
+});
+
+type TemplateParams = z.infer<typeof templateParams>;
+
+export class ProjectTemplateResource extends DynamicResource {
+  constructor() {
+    super({
+      uri: 'resource://project-template',
+      name: 'Project Template Generator',
+      description: 'Generates project template files based on parameters',
+      mimeType: 'text/markdown',
+    });
+  }
+
+  async generate(params: TemplateParams): Promise<string> {
+    // Validate input parameters
+    const validatedParams = templateParams.parse(params);
+
+    // Generate template content
+    return this.generateProjectTemplate(validatedParams);
+  }
+
+  private generateProjectTemplate(params: TemplateParams): string {
+    const { projectName, framework, typescript } = params;
+
+    return `# ${projectName}
+
+This is a ${framework} project${typescript ? ' with TypeScript' : ''}.
+
+## Installation
+
+\`\`\`bash
+npm create ${projectName}@latest
+cd ${projectName}
+npm install
+\`\`\`
+
+## Development
+
+\`\`\`bash
+npm run dev
+\`\`\`
+
+## Build
+
+\`\`\`bash
+npm run build
+\`\`\`
+
+## Scripts
+
+${typescript ? `
+### Available Scripts
+
+- \`npm run dev\` - Start development server
+- \`npm run build\` - Build for production
+- \`npm run preview\` - Preview production build
+` : `
+### Available Scripts
+
+- \`npm run dev\` - Start development server
+- \`npm run build\` - Build for production
+- \`npm run preview\` - Preview production build
+`}
+`;
+  }
+}
+```
+
+## Advanced Template Engine
+
+For more complex scenarios, let's create a template engine with partials:
+
+```typescript
+import { z } from 'zod';
+import fs from 'fs/promises';
+import path from 'path';
+
+const templateParams = z.object({
+  componentName: z.string().min(1),
+  props: z.array(z.string()).optional(),
+  framework: z.enum(['react', 'vue', 'angular']).default('react'),
+});
+
+type TemplateParams = z.infer<typeof templateParams>;
+
+export class ComponentTemplateResource extends DynamicResource {
+  private templates: Map<string, string> = new Map();
+
+  constructor() {
+    super({
+      uri: 'resource://component-template',
+      name: 'Component Template Generator',
+      description: 'Generates component templates for different frameworks',
+      mimeType: 'text/typescript',
+    });
+
+    this.loadTemplates();
+  }
+
+  private async loadTemplates(): Promise<void> {
+    // In a real implementation, you'd load from files
+    this.templates.set('react', this.getReactTemplate());
+    this.templates.set('vue', this.getVueTemplate());
+    this.templates.set('angular', this.getAngularTemplate());
+  }
+
+  async generate(params: TemplateParams): Promise<string> {
+    const validatedParams = templateParams.parse(params);
+
+    const template = this.templates.get(validatedParams.framework);
+    if (!template) {
+      throw new Error(`Template not found for framework: ${validatedParams.framework}`);
+    }
+
+    return this.renderTemplate(template, validatedParams);
+  }
+
+  private renderTemplate(template: string, params: TemplateParams): string {
+    let content = template;
+
+    // Replace simple variables
+    content = content.replace(/\{\{componentName\}\}/g, params.componentName);
+
+    if (params.props) {
+      const propsString = params.props.map(prop => `  ${prop}: ${this.getPropType(prop)}`).join('\n');
+      content = content.replace(/\{\{props\}\}/g, propsString);
+    }
+
+    return content;
+  }
+
+  private getPropType(prop: string): string {
+    // Simple type inference - in a real app, you'd have more sophisticated logic
+    return 'any';
+  }
+
+  private getReactTemplate(): string {
+    return `import React from 'react';
+
+interface {{componentName}}Props {
+  {{props}}
+}
+
+export const {{componentName}}: React.FC<{{componentName}}Props> = ({}) => {
+  return (
+    <div>
+      {/* Component content goes here */}
+    </div>
+  );
+};
+`;
+  }
+
+  private getVueTemplate(): string {
+    return `<template>
+  <div>
+    <!-- Component content goes here -->
+  </div>
+</template>
+
+<script lang="ts">
+import { defineComponent } from 'vue';
+
+interface Props {
+  {{props}}
+}
+
+export default defineComponent({
+  name: '{{componentName}}',
+  props: {},
+  setup() {
+    return {
+      // Setup logic goes here
+    };
+  }
+});
+</script>
+
+<style scoped>
+/* Component styles go here */
+</style>
+`;
+  }
+
+  private getAngularTemplate(): string {
+    return `import { Component, Input } from '@angular/core';
+
+@Component({
+  selector: 'app-{{componentName}}',
+  templateUrl: './{{componentName}}.component.html',
+  styleUrls: ['./{{componentName}}.component.scss']
+})
+export class {{componentName}}Component {
+  @Input() {{props}}
+}
+`;
+  }
+}
+```
+
+## Parameter Validation with Defaults
+
+Let's create a more robust dynamic resource with default values and advanced validation:
+
+```typescript
+import { z } from 'zod';
+
+const apiClientParams = z.object({
+  baseUrl: z.string().url('Must be a valid URL'),
+  endpoint: z.string().min(1, 'Endpoint is required'),
+  method: z.enum(['GET', 'POST', 'PUT', 'DELETE']).default('GET'),
+  headers: z.record(z.string(), z.string()).optional(),
+  timeout: z.number().min(1000).max(30000).default(10000),
+  retries: z.number().min(0).max(5).default(3),
+});
+
+type ApiClientParams = z.infer<typeof apiClientParams>;
+
+export class ApiClientResource extends DynamicResource {
+  constructor() {
+    super({
+      uri: 'resource://api-client',
+      name: 'API Client Generator',
+      description: 'Generates TypeScript API client code',
+      mimeType: 'text/typescript',
+    });
+  }
+
+  async generate(params: ApiClientParams): Promise<string> {
+    const validatedParams = apiClientParams.parse(params);
+
+    // Apply defaults if not provided
+    const finalParams = {
+      timeout: validatedParams.timeout,
+      retries: validatedParams.retries,
+      ...validatedParams,
+    };
+
+    return this.generateApiClient(finalParams);
+  }
+
+  private generateApiClient(params: ApiClientParams): string {
+    const { baseUrl, endpoint, method, headers, timeout, retries } = params;
+
+    return `import axios from 'axios';
+
+interface ApiResponse<T = any> {
+  data: T;
+  status: number;
+  statusText: string;
+}
+
+const apiClient = axios.create({
+  baseURL: '${baseUrl}',
+  timeout: ${timeout},
+  headers: ${JSON.stringify(headers || {}, null, 2)},
+});
+
+// Retry interceptor
+apiClient.interceptors.response.use(
+  response => response,
+  async error => {
+    const config = error.config;
+
+    if (!config.__retryCount) {
+      config.__retryCount = 0;
+    }
+
+    if (config.__retryCount >= ${retries}) {
+      return Promise.reject(error);
+    }
+
+    config.__retryCount += 1;
+
+    return new Promise(resolve => {
+      setTimeout(() => {
+        resolve(apiClient(config));
+      }, 1000 * config.__retryCount);
+    });
+  }
+);
+
+export async function fetch${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}() {
+  try {
+    const response: ApiResponse = await apiClient.${method.toLowerCase()}('${endpoint}');
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+}
+
+// TypeScript interfaces for response data
+export interface ${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}Response {
+  // Define your response interface here
+  id: string;
+  name: string;
+  createdAt: string;
+}
+`;
+  }
+}
+```
+
+## Conditional Template Generation
+
+Sometimes you want to generate different content based on conditions:
+
+```typescript
+import { z } from 'zod';
+
+const dockerfileParams = z.object({
+  baseImage: z.string().default('node:18-alpine'),
+  appType: z.enum(['frontend', 'backend', 'fullstack']).default('frontend'),
+  port: z.number().min(1).max(65535).default(3000),
+  environment: z.enum(['development', 'production']).default('development'),
+});
+
+type DockerfileParams = z.infer<typeof dockerfileParams>;
+
+export class DockerfileResource extends DynamicResource {
+  constructor() {
+    super({
+      uri: 'resource://dockerfile',
+      name: 'Dockerfile Generator',
+      description: 'Generates Dockerfile based on application type',
+      mimeType: 'text/dockerfile',
+    });
+  }
+
+  async generate(params: DockerfileParams): Promise<string> {
+    const validatedParams = dockerfileParams.parse(params);
+
+    return this.generateDockerfile(validatedParams);
+  }
+
+  private generateDockerfile(params: DockerfileParams): string {
+    const { baseImage, appType, port, environment } = params;
+
+    let dockerfile = `FROM ${baseImage}
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci --only=production
+
+COPY . .
+
+`;
+
+    // Add specific instructions based on app type
+    if (appType === 'frontend') {
+      dockerfile += `RUN npm run build
+
+EXPOSE ${port}
+
+CMD ["npm", "start"]`;
+    } else if (appType === 'backend') {
+      dockerfile += `EXPOSE ${port}
+
+CMD ["npm", "start"]`;
+    } else {
+      // Fullstack
+      dockerfile += `RUN npm run build
+
+EXPOSE ${port}
+
+CMD ["npm", "start"]`;
+    }
+
+    // Environment-specific optimizations
+    if (environment === 'production') {
+      dockerfile += `
+
+# Production optimizations
+RUN npm run build && rm -rf node_modules && npm ci --only=production`;
+    }
+
+    return dockerfile;
+  }
+}
+```
+
+---
+
+---
+
+
+
+1. **Question**: What is the primary advantage of using dynamic resources over static resources?
+   **Answer**: They can generate different content based on parameters, making them more flexible and reusable.
+
+2. **Question**: Why is input validation important in dynamic resources?
+   **Answer**: It ensures the generated content is correct and prevents errors from malformed or malicious inputs.
+
+3. **Question**: What Zod method should you use to validate input parameters?
+   **Answer**: `parse()` - it throws an error if validation fails and returns the validated data if successful.
+
+4. **Question**: How can you make template generation more maintainable?
+   **Answer**: Use separate template files, implement partials, and use template engines for complex scenarios.
+
+5. **Question**: What's the benefit of default values in resource parameters?
+   **Answer**: They make the resource more user-friendly by providing sensible defaults while still allowing customization.

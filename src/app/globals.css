@@ -1,0 +1,755 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light Mode - Modern, Clean Palette */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+
+    /* Primary - Vibrant Blue-Violet */
+    --primary: 262 80% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Soft Indigo */
+    --secondary: 240 70% 96%;
+    --secondary-foreground: 240 60% 25%;
+
+    /* Muted - Subtle Gray */
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 45%;
+
+    /* Accent - Warm Violet */
+    --accent: 262 70% 95%;
+    --accent-foreground: 262 60% 35%;
+
+    /* Destructive - Soft Red */
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Border - Subtle */
+    --border: 240 5% 88%;
+    --input: 240 5% 88%;
+    --ring: 262 80% 55%;
+
+    /* Border Radius */
+    --radius: 0.625rem;
+
+    /* Chart Colors - Vibrant Palette */
+    --chart-1: 262 80% 55%;
+    --chart-2: 190 85% 50%;
+    --chart-3: 145 70% 50%;
+    --chart-4: 35 90% 55%;
+    --chart-5: 280 75% 55%;
+
+    /* Gradient Colors */
+    --gradient-from: 262 80% 55%;
+    --gradient-to: 190 85% 50%;
+    --glow-color: 262 80% 55%;
+  }
+
+  .dark {
+    /* Dark Mode - Rich, Deep Palette */
+    --background: 240 12% 8%;
+    --foreground: 0 0% 95%;
+
+    --card: 240 10% 10%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 240 10% 10%;
+    --popover-foreground: 0 0% 95%;
+
+    /* Primary - Bright Violet */
+    --primary: 262 85% 65%;
+    --primary-foreground: 240 10% 8%;
+
+    /* Secondary - Deep Indigo */
+    --secondary: 240 15% 18%;
+    --secondary-foreground: 0 0% 95%;
+
+    /* Muted - Dark Gray */
+    --muted: 240 10% 15%;
+    --muted-foreground: 240 5% 65%;
+
+    /* Accent - Soft Violet */
+    --accent: 262 30% 20%;
+    --accent-foreground: 0 0% 95%;
+
+    /* Destructive - Muted Red */
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Border - Subtle */
+    --border: 240 8% 20%;
+    --input: 240 8% 20%;
+    --ring: 262 85% 65%;
+
+    /* Chart Colors - Muted but Vibrant */
+    --chart-1: 262 70% 55%;
+    --chart-2: 190 70% 45%;
+    --chart-3: 145 60% 45%;
+    --chart-4: 35 75% 50%;
+    --chart-5: 280 65% 50%;
+
+    /* Gradient Colors */
+    --gradient-from: 262 85% 65%;
+    --gradient-to: 190 85% 60%;
+    --glow-color: 262 85% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* prose - Markdown content styling */
+  .prose {
+    @apply text-foreground max-w-none;
+    color: hsl(var(--foreground));
+    line-height: 1.75;
+  }
+
+  .prose p {
+    @apply my-4 leading-7;
+  }
+
+  .prose h1 {
+    @apply text-4xl font-bold tracking-tight mt-8 mb-4 scroll-mt-20;
+  }
+
+  .prose h2 {
+    @apply text-3xl font-bold tracking-tight mt-8 mb-4 scroll-mt-20;
+  }
+
+  .prose h3 {
+    @apply text-2xl font-bold tracking-tight mt-6 mb-3 scroll-mt-20;
+  }
+
+  .prose h4 {
+    @apply text-xl font-bold tracking-tight mt-4 mb-2 scroll-mt-20;
+  }
+
+  .prose h5,
+  .prose h6 {
+    @apply text-lg font-semibold mt-4 mb-2 scroll-mt-20;
+  }
+
+  /* Anchor links for headings */
+  .prose :where(h1, h2, h3, h4, h5, h6) a {
+    @apply no-underline;
+  }
+
+  .prose :where(h1, h2, h3, h4, h5, h6) a:hover {
+    @apply underline;
+  }
+
+  /* Paragraphs */
+  .prose p:first-of-type {
+    @apply mt-0;
+  }
+
+  .prose p:last-of-type {
+    @apply mb-0;
+  }
+
+  /* Links */
+  .prose a {
+    @apply text-primary underline underline-offset-4 decoration-muted-foreground/50 hover:decoration-foreground transition-colors;
+  }
+
+  /* Inline code */
+  .prose code {
+    @apply relative rounded bg-muted px-[0.3em] py-[0.2em] font-mono text-sm font-semibold;
+    @apply text-foreground;
+  }
+
+  .prose code::before,
+  .prose code::after {
+    content: none;
+  }
+
+  /* Code blocks - Syntax highlighting with Shiki via rehype-pretty-code */
+  .prose pre {
+    @apply my-6 overflow-x-auto rounded-lg border;
+    /* Let Shiki handle the background via inline styles */
+    padding: 0;
+  }
+
+  /* The code element inside pre should preserve Shiki's styling */
+  .prose pre code {
+    @apply block p-4 text-sm font-mono;
+    @apply rounded-none bg-transparent;
+    @apply before:content-none after:content-none;
+  }
+
+  /* IMPORTANT: Apply the Shiki CSS variables as actual colors */
+  /* rehype-pretty-code uses CSS variables on spans like:
+   * <span style="--shiki-light:#D73A49;--shiki-dark:#F97583">function</span>
+   * We need to use these variables for the color property
+   */
+  .prose pre code span[style*="--shiki-"] {
+    color: var(--shiki-light) !important;
+  }
+
+  /* Dark mode: use dark variables */
+  .dark .prose pre code span[style*="--shiki-"] {
+    color: var(--shiki-dark) !important;
+  }
+
+  /* Also set the pre background using the CSS variables */
+  .prose pre[style*="--shiki-"] {
+    background-color: var(--shiki-light-bg) !important;
+  }
+
+  .dark .prose pre[style*="--shiki-"] {
+    background-color: var(--shiki-dark-bg) !important;
+  }
+
+  /* Line numbers and highlighting */
+  .prose pre [data-line] {
+    @apply px-4;
+  }
+
+  .prose pre .line {
+    @apply px-4;
+  }
+
+  .prose pre [data-highlighted-line] {
+    @apply bg-muted/30;
+  }
+
+  .prose pre [data-highlighted-chars] {
+    @apply rounded bg-primary/20;
+  }
+
+  /* Line highlighting class */
+  .prose pre .line--highlighted {
+    @apply bg-muted/30;
+  }
+
+  .prose pre .chars--highlighted {
+    @apply rounded bg-primary/20;
+  }
+
+  /* Code block header with filename */
+  .prose div[data-rehype-pretty-code-title] {
+    @apply flex items-center justify-between px-4 py-2 bg-muted/80 border-b rounded-t-lg;
+    @apply text-sm font-mono text-muted-foreground;
+  }
+
+  .prose .code-title {
+    @apply flex items-center justify-between px-4 py-2 bg-muted/80 border-b rounded-t-lg;
+    @apply text-sm font-mono text-muted-foreground;
+  }
+
+  /* Lists */
+  .prose ul,
+  .prose ol {
+    @apply my-4 ml-6 list-disc;
+  }
+
+  .prose ul {
+    @apply list-disc;
+  }
+
+  .prose ol {
+    @apply list-decimal;
+  }
+
+  .prose li {
+    @apply my-1;
+  }
+
+  .prose li > ul,
+  .prose li > ol {
+    @apply my-2;
+  }
+
+  .prose li::marker {
+    @apply text-muted-foreground;
+  }
+
+  /* Blockquotes */
+  .prose blockquote {
+    @apply my-6 border-l-4 border-muted-foreground/30 pl-6 italic text-muted-foreground;
+  }
+
+  .prose blockquote p:first-child {
+    @apply mt-0;
+  }
+
+  .prose blockquote p:last-child {
+    @apply mb-0;
+  }
+
+  /* Horizontal rule */
+  .prose hr {
+    @apply my-8 border-t border-border;
+  }
+
+  /* Tables */
+  .prose table {
+    @apply my-6 w-full border-collapse overflow-hidden rounded-lg border;
+  }
+
+  .prose thead {
+    @apply bg-muted/50;
+  }
+
+  .prose th {
+    @apply border border-border px-4 py-3 text-left font-semibold text-foreground;
+  }
+
+  .prose td {
+    @apply border border-border px-4 py-3 text-foreground;
+  }
+
+  .prose tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .prose tr:hover {
+    @apply bg-muted/30;
+  }
+
+  /* Strong and emphasis */
+  .prose strong {
+    @apply font-bold text-foreground;
+  }
+
+  .prose em {
+    @apply italic;
+  }
+
+  /* Images */
+  .prose img {
+    @apply rounded-lg shadow-md my-6;
+  }
+
+  /* Figures and captions */
+  .prose figure {
+    @apply my-6;
+  }
+
+  .prose figcaption {
+    @apply mt-2 text-center text-sm text-muted-foreground;
+  }
+
+  /* Definitions */
+  .prose dt {
+    @apply font-semibold text-foreground;
+  }
+
+  .prose dd {
+    @apply ml-6 text-muted-foreground;
+  }
+
+  /* Keyboard key styling */
+  .prose kbd {
+    @apply inline-flex items-center rounded-md border border-border bg-muted px-2 py-1;
+    @apply font-mono text-sm font-medium text-foreground shadow-sm;
+  }
+
+  /* Mark/highlight */
+  .prose mark {
+    @apply rounded bg-yellow-200/50 px-1 py-0.5 dark:bg-yellow-500/30;
+  }
+
+  /* Superscript and subscript */
+  .prose sup {
+    @apply text-xs align-super;
+  }
+
+  .prose sub {
+    @apply text-xs align-sub;
+  }
+
+  /* Dark mode overrides */
+  .dark .prose {
+    color: hsl(var(--foreground));
+  }
+
+  .dark .prose a {
+    @apply text-primary hover:text-primary/80;
+  }
+
+  .dark .prose strong {
+    @apply text-foreground;
+  }
+
+  .dark .prose code {
+    @apply text-foreground;
+  }
+
+  .dark .prose pre {
+    @apply bg-muted/20 border-border;
+  }
+
+  .dark .prose blockquote {
+    @apply border-muted-foreground/20;
+  }
+
+  .dark .prose th {
+    @apply bg-muted/20 border-border text-foreground;
+  }
+
+  .dark .prose td {
+    @apply border-border text-foreground;
+  }
+
+  .dark .prose tr:hover {
+    @apply bg-muted/10;
+  }
+}
+
+@layer utilities {
+  /* Existing animations */
+  .animate-in {
+    animation: enter 0.2s ease-out;
+  }
+  .animate-out {
+    animation: exit 0.2s ease-in;
+  }
+  .fade-in-0 {
+    opacity: 0;
+    animation: fade-in 0.2s ease-out forwards;
+  }
+  .fade-out-0 {
+    opacity: 1;
+    animation: fade-out 0.2s ease-in forwards;
+  }
+  .zoom-in-95 {
+    opacity: 0;
+    animation: zoom-in 0.2s ease-out forwards;
+  }
+  .zoom-out-95 {
+    opacity: 1;
+    animation: zoom-out 0.2s ease-in forwards;
+  }
+  .slide-in-from-left-1\/2 {
+    animation: slide-in-from-left 0.2s ease-out forwards;
+  }
+  .slide-in-from-top-\[48\%\] {
+    animation: slide-in-from-top 0.2s ease-out forwards;
+  }
+  .slide-out-to-left-1\/2 {
+    animation: slide-out-to-left 0.2s ease-in forwards;
+  }
+  .slide-out-to-top-\[48\%\] {
+    animation: slide-out-to-top 0.2s ease-in forwards;
+  }
+  .accordion-up {
+    animation: accordion-up 0.2s ease-out;
+  }
+  .accordion-down {
+    animation: accordion-down 0.2s ease-out;
+  }
+
+  /* Modern animations */
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient-shift 8s ease infinite;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.5s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.3s ease-out forwards;
+  }
+
+  /* Glassmorphism utilities */
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .dark .glass {
+    background: rgba(15, 15, 25, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-strong {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .dark .glass-strong {
+    background: rgba(15, 15, 25, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  /* Gradient backgrounds */
+  .gradient-primary {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--gradient-from)),
+      hsl(var(--gradient-to))
+    );
+  }
+
+  .gradient-subtle {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--muted)),
+      hsl(var(--accent))
+    );
+  }
+
+  /* Glow effects */
+  .glow {
+    box-shadow: 0 0 20px hsl(var(--glow-color) / 0.3);
+  }
+
+  .glow-sm {
+    box-shadow: 0 0 10px hsl(var(--glow-color) / 0.2);
+  }
+
+  .glow-lg {
+    box-shadow: 0 0 40px hsl(var(--glow-color) / 0.4);
+  }
+
+  /* Text gradient */
+  .text-gradient {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--gradient-from)),
+      hsl(var(--gradient-to))
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Hover lift effect */
+  .hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Focus visible improvements */
+  .focus-ring {
+    outline: none;
+  }
+
+  .focus-ring:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes exit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes zoom-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes slide-in-from-left {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-from-top {
+  from {
+    transform: translateY(-48%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-out-to-left {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes slide-out-to-top {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-48%);
+  }
+}
+
+@keyframes accordion-up {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes accordion-down {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+/* Modern animation keyframes */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

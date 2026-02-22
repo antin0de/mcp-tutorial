@@ -1,0 +1,341 @@
+# Understanding Project Structure
+
+A well-organized MCP project is easier to develop, test, and maintain. This section covers the standard structure and best practices.
+
+## Standard MCP Project Structure
+
+```
+my-mcp-server/
+├── src/
+│   ├── index.ts          # Entry point
+│   ├── server.ts         # Server configuration
+│   ├── handlers/         # Request handlers
+│   │   ├── resources.ts  # Resource handlers
+│   │   ├── tools.ts      # Tool handlers
+│   │   └── prompts.ts    # Prompt templates
+│   └── lib/              # Utility functions
+│       ├── logger.ts     # Logging utilities
+│       └── validator.ts  # Input validation
+├── tests/                # Test files
+│   ├── resources.test.ts
+│   ├── tools.test.ts
+│   └── prompts.test.ts
+├── dist/                 # Compiled JavaScript (generated)
+├── node_modules/         # Dependencies (generated)
+├── .env                  # Environment variables (local)
+├── .env.example          # Environment template
+├── .gitignore            # Git ignore rules
+├── package.json          # Project metadata
+├── tsconfig.json         # TypeScript config
+├── README.md             # Documentation
+└── mcp.config.json       # MCP server config
+```
+
+## Core Files Explained
+
+### package.json
+
+Defines your project and its dependencies:
+
+```json
+{
+  "name": "my-mcp-server",
+  "version": "1.0.0",
+  "description": "An MCP server for...",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "my-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "lint": "eslint src",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "keywords": ["mcp", "model-context-protocol"],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node-dev": "^2.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0"
+  }
+}
+```
+
+### tsconfig.json
+
+TypeScript compiler configuration:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "tests"]
+}
+```
+
+<Callout type="info">
+**Note**: The `Node16` module resolution is crucial for MCP servers, as it supports ES modules and proper package.json "exports" field resolution.
+</Callout>
+
+### mcp.config.json
+
+MCP server configuration:
+
+```json
+{
+  "name": "my-mcp-server",
+  "version": "1.0.0",
+  "description": "An MCP server for...",
+  "author": "Your Name",
+  "license": "MIT",
+  "command": "node",
+  "args": ["dist/index.js"],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
+```
+
+## Entry Point: src/index.ts
+
+The main file that starts your server:
+
+```typescript
+#!/usr/bin/env node
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { registerResourceHandlers } from './handlers/resources.js';
+import { registerToolHandlers } from './handlers/tools.js';
+import { registerPromptHandlers } from './handlers/prompts.js';
+
+async function main() {
+  // Create server instance
+  const server = new Server({
+    name: 'my-mcp-server',
+    version: '1.0.0',
+  }, {
+    capabilities: {
+      resources: {},
+      tools: {},
+      prompts: {},
+    },
+  });
+
+  // Register handlers
+  await registerResourceHandlers(server);
+  await registerToolHandlers(server);
+  await registerPromptHandlers(server);
+
+  // Start server
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  console.error('MCP server running on stdio');
+}
+
+main().catch((error) => {
+  console.error('Fatal error:', error);
+  process.exit(1);
+});
+```
+
+<Callout type="warning">
+**Shebang**: The `#!/usr/bin/env node` line at the top makes the file executable directly and ensures it runs with Node.js.
+</Callout>
+
+## Organizing Handlers
+
+### src/handlers/resources.ts
+
+```typescript
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+
+export async function registerResourceHandlers(server: Server) {
+  // Register resource listings
+  server.setRequestHandler('resources/list', async () => {
+    return {
+      resources: [
+        {
+          uri: 'file:///README.md',
+          name: 'README',
+          description: 'Project documentation',
+          mimeType: 'text/markdown',
+        },
+      ],
+    };
+  });
+
+  // Register resource reading
+  server.setRequestHandler('resources/read', async (request) => {
+    const { uri } = request.params;
+    // Read and return resource content
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'text/markdown',
+          text: '# Content here',
+        },
+      ],
+    };
+  });
+}
+```
+
+### src/handlers/tools.ts
+
+```typescript
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+
+export async function registerToolHandlers(server: Server) {
+  server.setRequestHandler('tools/list', async () => {
+    return {
+      tools: [
+        {
+          name: 'read_file',
+          description: 'Read a file from the file system',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              path: {
+                type: 'string',
+                description: 'Path to the file',
+              },
+            },
+            required: ['path'],
+          },
+        },
+      ],
+    };
+  });
+
+  server.setRequestHandler('tools/call', async (request) => {
+    const { name, arguments: args } = request.params;
+
+    switch (name) {
+      case 'read_file':
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `File content: ${args.path}`,
+            },
+          ],
+        };
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  });
+}
+```
+
+## .gitignore
+
+Exclude generated files and sensitive data:
+
+```gitignore
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Temporary files
+*.tmp
+.cache/
+```
+
+## Environment Variables
+
+Use `.env.example` as a template:
+
+```bash
+# .env.example
+PORT=3000
+NODE_ENV=development
+LOG_LEVEL=debug
+
+# API Keys (optional)
+API_KEY=
+API_SECRET=
+
+# Feature flags
+ENABLE_SUBSCRIPTIONS=true
+```
+
+## Best Practices
+
+### 1. Keep It Modular
+
+Separate concerns into different files and directories.
+
+### 2. Use Type Safety
+
+Leverage TypeScript for robust code.
+
+### 3. Add Tests
+
+Test all handlers and edge cases.
+
+### 4. Document Your Code
+
+Use JSDoc comments for functions.
+
+### 5. Handle Errors
+
+Implement proper error handling and logging.
+
+## Next Steps
+
+Now that you understand project structure, let's dive into MCP architecture and how components interact.
+

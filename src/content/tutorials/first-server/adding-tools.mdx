@@ -1,0 +1,368 @@
+---
+title: "Adding Tools"
+description: "Implement your first MCP tools: Echo and Calculator"
+section: 3
+estimatedTime: 25
+---
+
+# Section 3: Adding Tools
+
+Now that we have a basic MCP server, let's add some tools! In this section, we'll implement two useful tools: Echo (which echoes back input) and Calculator (which performs basic arithmetic).
+
+## Understanding MCP Tools
+
+MCP tools are functions that the LLM can call to perform specific actions. Each tool has:
+
+- **Name** - A unique identifier for the tool
+- **Description** - Human-readable description of what the tool does
+- **Input Schema** - JSON Schema defining the tool's parameters
+- **Implementation** - The actual function that gets executed
+
+The MCP protocol requires tools to follow a specific format:
+
+```typescript
+interface Tool {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: "object";
+    properties: Record<string, any>;
+    required?: string[];
+  };
+}
+```
+
+## Step 1: Define Tool Types
+
+First, let's define TypeScript interfaces for our tools:
+
+```typescript
+// src/index.ts
+interface EchoInput {
+  message: string;
+}
+
+interface CalculatorInput {
+  operation: "add" | "subtract" | "multiply" | "divide";
+  a: number;
+  b: number;
+}
+```
+
+## Step 2: Implement Echo Tool
+
+The Echo tool simply returns whatever message it receives:
+
+```typescript
+// src/index.ts
+class EchoTool {
+  static definition: Tool = {
+    name: "echo",
+    description: "Echo back the provided message",
+    inputSchema: {
+      type: "object",
+      properties: {
+        message: {
+          type: "string",
+          description: "The message to echo back",
+        },
+      },
+      required: ["message"],
+    },
+  };
+
+  static async execute(input: EchoInput): Promise<any> {
+    return { result: input.message };
+  }
+}
+```
+
+## Step 3: Implement Calculator Tool
+
+The Calculator tool performs basic arithmetic operations:
+
+```typescript
+// src/index.ts
+class CalculatorTool {
+  static definition: Tool = {
+    name: "calculator",
+    description: "Perform basic arithmetic operations",
+    inputSchema: {
+      type: "object",
+      properties: {
+        operation: {
+          type: "string",
+          enum: ["add", "subtract", "multiply", "divide"],
+          description: "The operation to perform",
+        },
+        a: {
+          type: "number",
+          description: "First number",
+        },
+        b: {
+          type: "number",
+          description: "Second number",
+        },
+      },
+      required: ["operation", "a", "b"],
+    },
+  };
+
+  static async execute(input: CalculatorInput): Promise<any> {
+    const { operation, a, b } = input;
+
+    switch (operation) {
+      case "add":
+        return { result: a + b };
+      case "subtract":
+        return { result: a - b };
+      case "multiply":
+        return { result: a * b };
+      case "divide":
+        if (b === 0) {
+          throw new Error("Division by zero");
+        }
+        return { result: a / b };
+      default:
+        throw new Error(`Unknown operation: ${operation}`);
+    }
+  }
+}
+```
+
+## Step 4: Update Server to Use Tools
+
+Now, let's update our BasicMCPServer class to handle these tools:
+
+```typescript
+// src/index.ts
+class BasicMCPServer {
+  private tools: Tool[] = [
+    EchoTool.definition,
+    CalculatorTool.definition,
+  ];
+
+  // ... existing code ...
+
+  private handleToolsList(params: any) {
+    return {
+      tools: this.tools,
+    };
+  }
+
+  private async handleToolCall(params: any) {
+    const { name, arguments: args } = params;
+
+    switch (name) {
+      case "echo":
+        return await EchoTool.execute(args as EchoInput);
+      case "calculator":
+        return await CalculatorTool.execute(args as CalculatorInput);
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  }
+}
+```
+
+## Complete Implementation with Tools
+
+Here's the complete updated server code:
+
+```typescript
+// src/index.ts
+import {
+  StdioServerTransport,
+  JsonRpc,
+  type ServerRequest,
+  type ServerResponse,
+  type Tool,
+} from '@modelcontextprotocol/sdk';
+
+interface EchoInput {
+  message: string;
+}
+
+interface CalculatorInput {
+  operation: "add" | "subtract" | "multiply" | "divide";
+  a: number;
+  b: number;
+}
+
+class EchoTool {
+  static definition: Tool = {
+    name: "echo",
+    description: "Echo back the provided message",
+    inputSchema: {
+      type: "object",
+      properties: {
+        message: {
+          type: "string",
+          description: "The message to echo back",
+        },
+      },
+      required: ["message"],
+    },
+  };
+
+  static async execute(input: EchoInput): Promise<any> {
+    return { result: input.message };
+  }
+}
+
+class CalculatorTool {
+  static definition: Tool = {
+    name: "calculator",
+    description: "Perform basic arithmetic operations",
+    inputSchema: {
+      type: "object",
+      properties: {
+        operation: {
+          type: "string",
+          enum: ["add", "subtract", "multiply", "divide"],
+          description: "The operation to perform",
+        },
+        a: {
+          type: "number",
+          description: "First number",
+        },
+        b: {
+          type: "number",
+          description: "Second number",
+        },
+      },
+      required: ["operation", "a", "b"],
+    },
+  };
+
+  static async execute(input: CalculatorInput): Promise<any> {
+    const { operation, a, b } = input;
+
+    switch (operation) {
+      case "add":
+        return { result: a + b };
+      case "subtract":
+        return { result: a - b };
+      case "multiply":
+        return { result: a * b };
+      case "divide":
+        if (b === 0) {
+          throw new Error("Division by zero");
+        }
+        return { result: a / b };
+      default:
+        throw new Error(`Unknown operation: ${operation}`);
+    }
+  }
+}
+
+class BasicMCPServer {
+  private rpc: JsonRpc;
+  private tools: Tool[] = [
+    EchoTool.definition,
+    CalculatorTool.definition,
+  ];
+
+  constructor() {
+    this.rpc = new JsonRpc({
+      handler: this.handleRequest.bind(this),
+    });
+  }
+
+  async handleRequest(request: ServerRequest): Promise<ServerResponse> {
+    const { method, params } = request;
+
+    switch (method) {
+      case 'initialize':
+        return this.handleInitialize(params);
+      case 'tools/list':
+        return this.handleToolsList(params);
+      case 'tools/call':
+        return await this.handleToolCall(params);
+      default:
+        throw new Error(`Unknown method: ${method}`);
+    }
+  }
+
+  private handleInitialize(params: any) {
+    return {
+      capabilities: {
+        tools: {},
+      },
+      serverInfo: {
+        name: 'basic-mcp-server',
+        version: '1.0.0',
+      },
+    };
+  }
+
+  private handleToolsList(params: any) {
+    return {
+      tools: this.tools,
+    };
+  }
+
+  private async handleToolCall(params: any) {
+    const { name, arguments: args } = params;
+
+    switch (name) {
+      case "echo":
+        return await EchoTool.execute(args as EchoInput);
+      case "calculator":
+        return await CalculatorTool.execute(args as CalculatorInput);
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  }
+}
+
+async function main() {
+  const server = new BasicMCPServer();
+  const transport = new StdioServerTransport();
+
+  transport.connect(server.rpc);
+
+  console.log('MCP Server running with Echo and Calculator tools');
+}
+
+main().catch(console.error);
+```
+
+## Step 5: Test the Tools
+
+Let's test our tools by building and running the server:
+
+```bash
+npm run build
+npm run start
+```
+
+The server is now running with two functional tools!
+
+---
+
+
+
+Let's test your understanding of MCP tools:
+
+**Question**: What happens when a client calls a tool that doesn't exist in our server?
+
+**Answer**: The server throws an error with message "Unknown tool: [tool-name]" which gets returned to the client as an error response.
+
+---
+
+## Summary
+
+In this section, we've successfully added two functional tools to our MCP server:
+
+- ✅ **Echo Tool** - Returns whatever message it receives
+- ✅ **Calculator Tool** - Performs basic arithmetic operations
+- ✅ **Proper Tool Definitions** - Each tool has correct name, description, and input schema
+- ✅ **Error Handling** - Tools handle errors appropriately
+
+Our server is now much more useful! In the next section, we'll learn how to test it using MCP Inspector.
+
+## Next Steps
+
+In Section 4, we'll test our MCP server using MCP Inspector to ensure it works correctly before connecting it to Claude Desktop or Cursor.
+---

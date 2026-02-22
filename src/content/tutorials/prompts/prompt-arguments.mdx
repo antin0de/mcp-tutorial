@@ -1,0 +1,705 @@
+---
+title: "Prompt Arguments"
+description: "Master argument handling, validation, and type checking for prompts"
+---
+
+# Prompt Arguments
+
+Arguments are the dynamic values that bring your prompt templates to life. Effective argument handling ensures your prompts are robust, secure, and maintainable. In this section, we'll explore how to work with prompt arguments, validate them, and handle edge cases.
+
+## Understanding Prompt Arguments
+
+Prompt arguments are the values you substitute into template variables. They transform static templates into dynamic, context-aware interactions. Unlike simple string replacement, MCP arguments support sophisticated validation and type checking.
+
+### Argument Types and Their Uses
+
+**String Arguments**
+```typescript
+const simpleArgument = {
+  name: "user-name",
+  value: "Alice Johnson",
+  type: "string",
+  required: true
+};
+
+const template = "Hello {{user-name}}, welcome to our platform!";
+```
+
+**Number Arguments**
+```typescript
+const numericArgument = {
+  name: "count",
+  value: 10,
+  type: "number",
+  min: 1,
+  max: 100
+};
+
+const template = "Processing {{count}} items...";
+```
+
+**Boolean Arguments**
+```typescript
+const booleanArgument = {
+  name: "include-examples",
+  value: true,
+  type: "boolean",
+  default: true
+};
+
+const template = "{{#if include-examples}}Here are some examples:{{/if}}";
+```
+
+**Object Arguments**
+```typescript
+const objectArgument = {
+  name: "user",
+  value: {
+    name: "Bob",
+    role: "admin",
+    preferences: { theme: "dark" }
+  },
+  type: "object"
+};
+
+const template = "Hello {{user.name}}, your role is {{user.role}}";
+```
+
+**Array Arguments**
+```typescript
+const arrayArgument = {
+  name: "features",
+  value: ["auth", "dashboard", "api"],
+  type: "array",
+  minItems: 1
+};
+
+const template = "Available features: {{#each features}}{{this}}, {{/each}}";
+```
+
+## Argument Validation
+
+Robust validation ensures your prompts work correctly and safely. Let's implement comprehensive argument validation.
+
+### Basic Validation Framework
+
+```typescript
+interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+class ArgumentValidator {
+  validate(argument: any, schema: ArgumentSchema): ValidationResult {
+    const result: ValidationResult = {
+      valid: true,
+      errors: [],
+      warnings: []
+    };
+
+    // Check required fields
+    if (schema.required && argument === undefined) {
+      result.valid = false;
+      result.errors.push(`Required argument '${schema.name}' is missing`);
+      return result;
+    }
+
+    // Skip validation if argument is undefined and not required
+    if (argument === undefined) {
+      return result;
+    }
+
+    // Type validation
+    if (!this.validateType(argument, schema)) {
+      result.valid = false;
+      result.errors.push(`Argument '${schema.name}' has invalid type`);
+      return result;
+    }
+
+    // Custom validations
+    if (schema.min !== undefined && argument < schema.min) {
+      result.valid = false;
+      result.errors.push(`Argument '${schema.name}' must be at least ${schema.min}`);
+    }
+
+    if (schema.max !== undefined && argument > schema.max) {
+      result.valid = false;
+      result.errors.push(`Argument '${schema.name}' must be at most ${schema.max}`);
+    }
+
+    if (schema.minLength !== undefined && typeof argument === 'string' && argument.length < schema.minLength) {
+      result.valid = false;
+      result.errors.push(`Argument '${schema.name}' must be at least ${schema.minLength} characters`);
+    }
+
+    if (schema.maxLength !== undefined && typeof argument === 'string' && argument.length > schema.maxLength) {
+      result.valid = false;
+      result.errors.push(`Argument '${schema.name}' must be at most ${schema.maxLength} characters`);
+    }
+
+    // Pattern validation for strings
+    if (schema.pattern && typeof argument === 'string') {
+      const regex = new RegExp(schema.pattern);
+      if (!regex.test(argument)) {
+        result.valid = false;
+        result.errors.push(`Argument '${schema.name}' doesn't match required pattern: ${schema.pattern}`);
+      }
+    }
+
+    return result;
+  }
+
+  private validateType(value: any, schema: ArgumentSchema): boolean {
+    switch (schema.type) {
+      case 'string':
+        return typeof value === 'string';
+      case 'number':
+        return typeof value === 'number' && !isNaN(value);
+      case 'boolean':
+        return typeof value === 'boolean';
+      case 'array':
+        return Array.isArray(value);
+      case 'object':
+        return typeof value === 'object' && value !== null;
+      default:
+        return true;
+    }
+  }
+}
+```
+
+### Zod Integration for Advanced Validation
+
+For production applications, Zod provides excellent schema validation:
+
+```typescript
+import { z } from 'zod';
+
+// Define argument schemas
+const argumentSchemas = z.object({
+  language: z.string().min(2).max(50),
+  code: z.string().min(1).max(10000),
+  severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+  includeTests: z.boolean().default(false),
+  reviewer: z.string().email().optional(),
+  tags: z.array(z.string()).optional()
+});
+
+type Arguments = z.infer<typeof argumentSchemas>;
+
+class ZodArgumentValidator {
+  validate(arguments: unknown): { success: boolean; data?: Arguments; error?: string } {
+    const result = argumentSchemas.safeParse(arguments);
+    return {
+      success: result.success,
+      data: result.success ? result.data : undefined,
+      error: result.success ? undefined : result.error.message
+    };
+  }
+}
+```
+
+## Argument Processing Pipeline
+
+Create a robust processing pipeline that handles arguments end-to-end:
+
+```typescript
+class ArgumentProcessor {
+  constructor(
+    private validator: ArgumentValidator,
+    private sanitizer: ArgumentSanitizer
+  ) {}
+
+  async processArguments(
+    template: PromptTemplate,
+    rawArguments: Record<string, any>
+  ): Promise<ProcessedArguments> {
+    const processed: ProcessedArguments = {
+      success: true,
+      variables: {},
+      errors: [],
+      warnings: [],
+      substitutions: []
+    };
+
+    // Process each required variable
+    for (const variableName of template.variables) {
+      const rawValue = rawArguments[variableName];
+      const schema = this.getSchemaForVariable(variableName, template);
+
+      // Get default value if specified
+      const value = this.resolveValue(rawValue, schema);
+
+      // Validate the argument
+      const validation = this.validator.validate(value, schema);
+
+      if (!validation.valid) {
+        processed.success = false;
+        processed.errors.push(...validation.errors);
+      }
+
+      // Sanitize if valid
+      if (validation.valid) {
+        const sanitizedValue = this.sanitizer.sanitize(value, schema);
+        processed.variables[variableName] = sanitizedValue;
+        processed.substitutions.push({
+          variable: variableName,
+          original: rawValue,
+          processed: sanitizedValue
+        });
+
+        processed.warnings.push(...validation.warnings);
+      }
+    }
+
+    return processed;
+  }
+
+  private getSchemaForVariable(variableName: string, template: PromptTemplate): ArgumentSchema {
+    // Return schema based on variable name and template context
+    return {
+      name: variableName,
+      type: this.inferType(template, variableName),
+      required: template.variables.includes(variableName),
+      // Add other schema properties based on conventions
+    };
+  }
+
+  private resolveValue(rawValue: any, schema: ArgumentSchema): any {
+    if (rawValue === undefined && schema.default !== undefined) {
+      return schema.default;
+    }
+    return rawValue;
+  }
+
+  private inferType(template: PromptTemplate, variableName: string): string {
+    // Try to infer type from usage patterns in the template
+    const templateContent = template.template;
+
+    if (templateContent.includes(`{{${variableName}.`) || templateContent.includes(`{{#${variableName}}}`)) {
+      return 'object';
+    }
+
+    if (templateContent.includes(`{{#each ${variableName}}}`)) {
+      return 'array';
+    }
+
+    if (templateContent.includes(`{{#if ${variableName}}}`)) {
+      return 'boolean';
+    }
+
+    if (/\b\d+(\.\d+)?\b/.test(templateContent)) {
+      return 'number';
+    }
+
+    return 'string';
+  }
+}
+```
+
+## Handling Complex Argument Scenarios
+
+### Nested Object Arguments
+
+```typescript
+const nestedTemplate = {
+  name: "user-profile",
+  template: "Hello {{user.name}}, your role is {{user.role}}. Department: {{user.department.name}}",
+  variables: ["user"]
+};
+
+const nestedArguments = {
+  user: {
+    name: "Alice",
+    role: "developer",
+    department: {
+      name: "Engineering",
+      location: "Building A"
+    }
+  }
+};
+
+// Handle nested properties
+function resolveNestedProperty(obj: any, path: string): any {
+  return path.split('.').reduce((current, key) => current?.[key], obj);
+}
+```
+
+### Conditional Arguments with Defaults
+
+```typescript
+class ArgumentResolver {
+  resolveWithDefaults(template: PromptTemplate, providedArgs: Record<string, any>): Record<string, any> {
+    const resolved = { ...providedArgs };
+
+    // Set defaults for optional variables
+    template.variables.forEach(variable => {
+      if (resolved[variable] === undefined) {
+        const defaultTemplate = this.getDefaultTemplate(variable, template);
+        if (defaultTemplate) {
+          resolved[variable] = this.renderTemplate(defaultTemplate, resolved);
+        }
+      }
+    });
+
+    return resolved;
+  }
+
+  private getDefaultTemplate(variable: string, template: PromptTemplate): string | null {
+    // Look for default patterns in the template
+    const pattern = new RegExp(`{{${variable}:-([^}]+)}}`);
+    const match = template.template.match(pattern);
+    return match ? match[1] : null;
+  }
+}
+```
+
+### Argument Transformation
+
+```typescript
+class ArgumentTransformer {
+  transformArguments(
+    args: Record<string, any>,
+    transformations: Record<string, (value: any) => any>
+  ): Record<string, any> {
+    const transformed = { ...args };
+
+    Object.entries(transformations).forEach(([key, transform]) => {
+      if (transformed[key] !== undefined) {
+        transformed[key] = transform(transformed[key]);
+      }
+    });
+
+    return transformed;
+  }
+
+  // Common transformations
+  static transformations = {
+    capitalize: (str: string) => str.charAt(0).toUpperCase() + str.slice(1),
+    lowercase: (str: string) => str.toLowerCase(),
+    uppercase: (str: string) => str.toUpperCase(),
+    trim: (str: string) => str.trim(),
+    round: (num: number) => Math.round(num),
+    date: (str: string) => new Date(str).toISOString(),
+    json: (obj: any) => JSON.stringify(obj, null, 2)
+  };
+}
+```
+
+## Error Handling and User Experience
+
+### Comprehensive Error Messages
+
+```typescript
+class ArgumentErrorHandler {
+  formatValidationErrors(errors: ValidationError[]): string {
+    if (errors.length === 0) return '';
+
+    if (errors.length === 1) {
+      return `Error: ${errors[0].message}`;
+    }
+
+    const messages = errors.map((error, index) =>
+      `${index + 1}. ${error.message}`
+    );
+
+    return `Validation failed:\n${messages.join('\n')}`;
+  }
+
+  createHelpMessage(template: PromptTemplate, missingArgs: string[]): string {
+    if (missingArgs.length === 0) return '';
+
+    const variableInfo = template.variables
+      .filter(v => missingArgs.includes(v))
+      .map(v => {
+        const schema = this.getVariableSchema(v);
+        return `- ${v}: ${schema.description || 'Required argument'}`;
+      })
+      .join('\n');
+
+    return `Missing required arguments:\n${variableInfo}\n\nPlease provide all required values.`;
+  }
+
+  suggestAlternatives(providedArg: string, availableArgs: string[]): string {
+    const suggestions = this.getSimilarNames(providedArg, availableArgs);
+
+    if (suggestions.length > 0) {
+      return `Did you mean: ${suggestions.join(', ')}?`;
+    }
+
+    return `Available arguments: ${availableArgs.join(', ')}`;
+  }
+
+  private getSimilarNames(target: string, candidates: string[]): string[] {
+    // Simple similarity check - in production, use more sophisticated algorithms
+    return candidates.filter(candidate => {
+      const distance = this.calculateLevenshteinDistance(target, candidate);
+      return distance <= 2; // Allow 2 character differences
+    });
+  }
+
+  private calculateLevenshteinDistance(a: string, b: string): number {
+    // Implementation of Levenshtein distance algorithm
+    // (simplified for brevity)
+    return Math.abs(a.length - b.length);
+  }
+}
+```
+
+### Argument Cache and Performance
+
+```typescript
+class ArgumentCache {
+  private cache = new Map<string, any>();
+  private maxSize = 1000;
+
+  set(key: string, value: any): void {
+    if (this.cache.size >= this.maxSize) {
+      // Remove oldest entry
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+
+    this.cache.set(key, {
+      value,
+      timestamp: Date.now()
+    });
+  }
+
+  get(key: string): any | null {
+    const cached = this.cache.get(key);
+    if (cached) {
+      return cached.value;
+    }
+    return null;
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  // Cache key generation
+  generateKey(template: PromptTemplate, args: Record<string, any>): string {
+    const argsString = JSON.stringify(args, Object.keys(args).sort());
+    return `${template.name}:${argsString}`;
+  }
+}
+```
+
+## Real-World Examples
+
+### 1. Code Review Arguments
+
+```typescript
+const codeReviewArgumentSchema = z.object({
+  language: z.enum(['javascript', 'typescript', 'python', 'java', 'go', 'rust']),
+  code: z.string().min(10).max(10000),
+  focus: z.enum(['performance', 'security', 'readability', 'maintainability']).default('readability'),
+  severity: z.enum(['info', 'warning', 'error']).default('warning'),
+  includeTests: z.boolean().default(false),
+  reviewer: z.string().email().optional(),
+  tags: z.array(z.string()).default([])
+});
+
+class CodeReviewProcessor {
+  async processReviewArguments(rawArgs: unknown) {
+    const result = codeReviewArgumentSchema.safeParse(rawArgs);
+
+    if (!result.success) {
+      throw new Error(`Invalid arguments: ${result.error.message}`);
+    }
+
+    const args = result.data;
+
+    // Transform arguments
+    const transformed = {
+      ...args,
+      // Add derived values
+      focusIcons: this.getFocusIcons(args.focus),
+      formattedCode: this.formatCode(args.code, args.language),
+      timestamp: new Date().toISOString()
+    };
+
+    return transformed;
+  }
+
+  private getFocusIcons(focus: string): string[] {
+    const icons = {
+      performance: ['⚡', '🚀'],
+      security: ['🔒', '🛡️'],
+      readability: ['👁️', '📖'],
+      maintainability: ['🔧', '🛠️']
+    };
+    return icons[focus] || [];
+  }
+
+  private formatCode(code: string, language: string): string {
+    return `\`\`\`${language}\n${code}\n\`\`\``;
+  }
+}
+```
+
+### 2. Data Analysis Arguments
+
+```typescript
+const analysisArgumentSchema = z.object({
+  dataType: z.enum(['numeric', 'categorical', 'text', 'time-series']),
+  data: z.array(z.unknown()).min(1),
+  analysisType: z.enum(['descriptive', 'inferential', 'predictive']),
+  confidence: z.number().min(0).max(1).default(0.95),
+  includeVisualizations: z.boolean().default(true),
+  outputFormat: z.enum(['markdown', 'html', 'json']).default('markdown'),
+  timeRange: z.object({
+    start: z.string().optional(),
+    end: z.string().optional()
+  }).optional()
+});
+
+class AnalysisArgumentProcessor {
+  async processAnalysisArguments(rawArgs: unknown) {
+    const result = analysisArgumentSchema.safeParse(rawArgs);
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error.message
+      };
+    }
+
+    const args = result.data;
+
+    // Validate data based on type
+    const dataValidation = this.validateData(args.data, args.dataType);
+    if (!dataValidation.valid) {
+      return {
+        success: false,
+        error: dataValidation.error
+      };
+    }
+
+    // Prepare analysis context
+    const context = {
+      ...args,
+      metadata: {
+        dataPoints: args.data.length,
+        dataTypes: this.detectDataTypes(args.data),
+        analysisMetadata: this.getAnalysisMetadata(args)
+      }
+    };
+
+    return {
+      success: true,
+      data: context
+    };
+  }
+
+  private validateData(data: any[], dataType: string): { valid: boolean; error?: string } {
+    switch (dataType) {
+      case 'numeric':
+        if (!data.every(item => typeof item === 'number')) {
+          return { valid: false, error: 'All data must be numeric' };
+        }
+        break;
+      case 'categorical':
+        if (!data.every(item => typeof item === 'string')) {
+          return { valid: false, error: 'All data must be strings for categorical analysis' };
+        }
+        break;
+    }
+    return { valid: true };
+  }
+
+  private detectDataTypes(data: any[]): string[] {
+    const types = new Set<string>();
+    data.forEach(item => {
+      types.add(typeof item);
+    });
+    return Array.from(types);
+  }
+
+  private getAnalysisMetadata(args: z.infer<typeof analysisArgumentSchema>) {
+    return {
+      estimatedDuration: this.estimateAnalysisTime(args.data.length, args.analysisType),
+      memoryRequirement: this.estimateMemory(args.data.length),
+      complexity: this.estimateComplexity(args)
+    };
+  }
+}
+```
+
+## Best Practices for Argument Handling
+
+### 1. Use Strong Typing
+
+```typescript
+// Define clear interfaces
+interface PromptArguments {
+  required: {
+    templateName: string;
+    variables: Record<string, any>;
+  };
+  optional?: {
+    context?: Record<string, any>;
+    constraints?: PromptConstraints;
+    metadata?: ArgumentMetadata;
+  };
+}
+
+// Type-safe processing
+class TypedArgumentProcessor {
+  process<T extends PromptArguments>(args: T): ProcessedArguments<T> {
+    // Type-safe implementation
+    return {
+      ...args,
+      processedAt: new Date()
+    };
+  }
+}
+```
+
+### 2. Validate Early and Often
+
+```typescript
+class EarlyValidationProcessor {
+  async validateBeforeProcessing(args: unknown, schema: z.ZodSchema): Promise<void> {
+    const result = schema.safeParse(args);
+    if (!result.success) {
+      throw new ValidationError('Invalid arguments', result.error);
+    }
+  }
+
+  async validateAfterProcessing(processed: any): Promise<void> {
+    // Post-processing validation
+    if (processed.success) {
+      // Additional checks
+      this.checkProcessedOutput(processed);
+    }
+  }
+}
+```
+
+### 3. Provide Clear Error Messages
+
+```typescript
+class UserFriendlyErrorHandler {
+  formatForUser(error: ValidationError): string {
+    if (error.type === 'MISSING_REQUIRED') {
+      return `Missing required field: ${error.field}. Please provide this information.`;
+    }
+
+    if (error.type === 'INVALID_TYPE') {
+      return `Invalid type for ${error.field}. Expected: ${error.expected}, got: ${error.actual}.`;
+    }
+
+    if (error.type === 'OUT_OF_RANGE') {
+      return `${error.field} must be between ${error.min} and ${error.max}.`;
+    }
+
+    return 'Please check your input and try again.';
+  }
+}
+```
+
+
+

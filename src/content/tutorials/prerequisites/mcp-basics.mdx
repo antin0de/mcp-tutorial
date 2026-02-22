@@ -1,0 +1,134 @@
+# What is MCP?
+
+The Model Context Protocol (MCP) is an open protocol that enables AI assistants to connect to external data sources and tools. Think of it as a universal language that AI systems can use to interact with your applications.
+
+## The Problem MCP Solves
+
+Before MCP, AI assistants were limited to:
+
+- Their training data (which becomes outdated)
+- Manual user input (copying and pasting)
+- Custom integrations built for each AI system
+
+This creates a fragmented landscape where developers must build separate integrations for Claude, ChatGPT, and other AI systems.
+
+## How MCP Works
+
+MCP provides a standardized way for AI systems to:
+
+1. **Discover** available resources and tools
+2. **Request** data from external sources
+3. **Execute** actions through defined tools
+4. **Receive** structured responses
+
+<Callout type="info">
+**Architecture**: MCP uses a client-server model where your application acts as a "server" that exposes functionality, and the AI assistant acts as a "client" that makes requests.
+</Callout>
+
+## Key Concepts
+
+### Resources
+
+Resources are data that your application exposes to AI systems. They can be:
+
+- Files and documents
+- Database records
+- API responses
+- Real-time data streams
+
+### Tools
+
+Tools are actions that AI systems can request your application to perform:
+
+- Execute commands
+- Modify data
+- Trigger workflows
+- Perform calculations
+
+### Prompts
+
+Prompts are reusable templates that help AI systems interact with your application effectively:
+
+- Pre-formatted queries
+- Context-aware instructions
+- Best-practice patterns
+
+## MCP in Action
+
+Here's a simplified example of how an AI assistant interacts with an MCP server:
+
+```typescript
+// AI Assistant Request
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "read_file",
+    "arguments": {
+      "path": "/workspace/README.md"
+    }
+  },
+  "id": 1
+}
+
+// MCP Server Response
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "# My Project\nThis is a readme..."
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+## Why MCP Matters
+
+<Callout type="success">
+**Universal Compatibility**: Build once, use everywhere. An MCP server you build today works with Claude, ChatGPT, and any other AI system that implements the MCP protocol.
+</Callout>
+
+MCP provides:
+
+- **Standardization**: One protocol for all AI systems
+- **Flexibility**: Expose any data or functionality
+- **Security**: Control what AI systems can access
+- **Simplicity**: Easy to implement and maintain
+
+## Real-World Use Cases
+
+MCP servers can power:
+
+- **Code assistants**: Access your codebase, run tests, deploy code
+- **Data analysis**: Query databases, generate reports
+- **Workflow automation**: Trigger actions, update systems
+- **Documentation**: Search docs, answer questions
+- **DevOps**: Manage infrastructure, monitor systems
+
+## The MCP Ecosystem
+
+The MCP ecosystem includes:
+
+- **MCP Servers**: Applications that expose data and tools
+- **MCP Clients**: AI systems that make requests
+- **MCP Hosts**: Applications that run MCP servers (like Claude Desktop)
+- **MCP Inspector**: Development tool for testing servers
+
+## What You'll Build
+
+In this tutorial, you'll build a complete MCP server that:
+
+1. Exposes file system resources
+2. Provides code analysis tools
+3. Offers helpful prompt templates
+4. Handles errors gracefully
+5. Follows best practices
+
+## Next Steps
+
+Ready to dive deeper? Let's set up your development environment with the essential tools.
+

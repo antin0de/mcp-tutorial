@@ -1,0 +1,230 @@
+---
+title: "Basic MCP Server"
+description: "Create your first MCP server that responds to protocol messages"
+section: 2
+estimatedTime: 20
+---
+
+# Section 2: Basic MCP Server
+
+In this section, we'll create the foundation of our MCP server - the basic structure that can communicate using the MCP protocol via stdio transport.
+
+## Understanding MCP Protocol
+
+The MCP (Model Context Protocol) uses JSON-RPC 2.0 for communication between the server and client. The protocol works as follows:
+
+1. **Client sends requests** to the server
+2. **Server processes requests** and sends responses
+3. **Communication happens via stdio** (stdin/stdout) for local development
+
+The most important messages in MCP are:
+
+- `initialize` - Server capabilities and configuration
+- `tools/list` - List available tools
+- `tools/call` - Execute a specific tool
+- `notifications/list` - List available notifications
+
+## Step 1: Import Required Modules
+
+Let's start by importing the necessary modules from the MCP SDK:
+
+```typescript
+// src/index.ts
+import {
+  StdioServerTransport,
+  JsonRpc,
+  type ServerRequest,
+  type ServerResponse,
+  type Tool,
+} from '@modelcontextprotocol/sdk';
+```
+
+## Step 2: Create Server Class
+
+We'll create a basic server class to handle MCP messages:
+
+```typescript
+// src/index.ts
+class BasicMCPServer {
+  private rpc: JsonRpc;
+
+  constructor() {
+    this.rpc = new JsonRpc({
+      handler: this.handleRequest.bind(this),
+    });
+  }
+
+  async handleRequest(request: ServerRequest): Promise<ServerResponse> {
+    const { method, params } = request;
+
+    switch (method) {
+      case 'initialize':
+        return this.handleInitialize(params);
+      case 'tools/list':
+        return this.handleToolsList(params);
+      case 'tools/call':
+        return this.handleToolCall(params);
+      default:
+        throw new Error(`Unknown method: ${method}`);
+    }
+  }
+
+  private handleInitialize(params: any) {
+    return {
+      capabilities: {
+        tools: {},
+      },
+      serverInfo: {
+        name: 'basic-mcp-server',
+        version: '1.0.0',
+      },
+    };
+  }
+
+  private handleToolsList(params: any) {
+    return {
+      tools: [],
+    };
+  }
+
+  private handleToolCall(params: any) {
+    throw new Error('No tools implemented yet');
+  }
+}
+```
+
+## Step 3: Set Up Stdio Transport
+
+Now, let's set up the stdio transport and start listening for messages:
+
+```typescript
+// src/index.ts
+async function main() {
+  const server = new BasicMCPServer();
+  const transport = new StdioServerTransport();
+
+  // Connect the RPC server to the transport
+  transport.connect(server.rpc);
+
+  console.log('MCP Server running via stdio');
+}
+
+main().catch(console.error);
+```
+
+## Complete Server Implementation
+
+Here's the complete code for our basic MCP server:
+
+```typescript
+// src/index.ts
+import {
+  StdioServerTransport,
+  JsonRpc,
+  type ServerRequest,
+  type ServerResponse,
+  type Tool,
+} from '@modelcontextprotocol/sdk';
+
+class BasicMCPServer {
+  private rpc: JsonRpc;
+
+  constructor() {
+    this.rpc = new JsonRpc({
+      handler: this.handleRequest.bind(this),
+    });
+  }
+
+  async handleRequest(request: ServerRequest): Promise<ServerResponse> {
+    const { method, params } = request;
+
+    switch (method) {
+      case 'initialize':
+        return this.handleInitialize(params);
+      case 'tools/list':
+        return this.handleToolsList(params);
+      case 'tools/call':
+        return this.handleToolCall(params);
+      default:
+        throw new Error(`Unknown method: ${method}`);
+    }
+  }
+
+  private handleInitialize(params: any) {
+    return {
+      capabilities: {
+        tools: {},
+      },
+      serverInfo: {
+        name: 'basic-mcp-server',
+        version: '1.0.0',
+      },
+    };
+  }
+
+  private handleToolsList(params: any) {
+    return {
+      tools: [],
+    };
+  }
+
+  private handleToolCall(params: any) {
+    throw new Error('No tools implemented yet');
+  }
+}
+
+async function main() {
+  const server = new BasicMCPServer();
+  const transport = new StdioServerTransport();
+
+  transport.connect(server.rpc);
+
+  console.log('MCP Server running via stdio');
+}
+
+main().catch(console.error);
+```
+
+## Step 4: Test the Server
+
+Let's run our basic server to see if it works:
+
+```bash
+npm run dev
+```
+
+You should see:
+
+```
+MCP Server running via stdio
+```
+
+The server is now running and ready to receive MCP messages via stdio!
+
+## Understanding the Flow
+
+Here's what happens when you run the server:
+
+1. **Server starts** and creates a JsonRpc instance
+2. **Transport connects** to stdio (stdin/stdout)
+3. **Client sends messages** via stdin
+4. **Server processes** messages and responds via stdout
+5. **Connection continues** until process exits
+
+---
+
+## Summary
+
+In this section, we've created a basic MCP server that:
+
+- ✅ Responds to MCP protocol messages
+- ✅ Handles the three core methods: initialize, tools/list, and tools/call
+- ✅ Uses stdio transport for communication
+- ✅ Is ready to be extended with tools
+
+The server is functional but doesn't have any tools yet. In the next section, we'll add some real tools to make it useful.
+
+## Next Steps
+
+In Section 3, we'll add our first tools - Echo and Calculator - to make our MCP server actually useful.
+---

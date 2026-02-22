@@ -1,0 +1,497 @@
+---
+title: "Prompt Templates"
+description: "Learn to create reusable prompt templates with variable substitution"
+---
+
+# Prompt Templates
+
+Prompt templates are the foundation of effective AI interactions in MCP. They provide structured conversation flows that can be dynamically customized with variables, ensuring consistency while allowing flexibility for different contexts.
+
+## What Are Prompt Templates?
+
+Prompt templates are reusable text patterns with placeholders that can be replaced with actual values. Think of them as "stencils" for AI interactions that maintain consistent structure while adapting to specific inputs.
+
+### Basic Template Structure
+
+```typescript
+interface PromptTemplate {
+  name: string;
+  description: string;
+  template: string;
+  variables: string[];
+  constraints?: PromptConstraints;
+}
+```
+
+**Example: Simple Code Review Template**
+```typescript
+const codeReviewTemplate = {
+  name: "code-review",
+  description: "Review code for quality and best practices",
+  template: `You are an expert code reviewer. Please review the following {{language}} code:
+
+\`\`\`{{language}}
+{{code}}
+\`\`\`
+
+Please provide:
+1. Overall code quality assessment
+2. Specific issues found
+3. Improvement suggestions
+4. Security considerations
+
+Format your response in markdown with clear sections.`,
+  variables: ["language", "code"]
+};
+```
+
+## Variable Substitution
+
+Variables allow templates to adapt to different contexts while maintaining consistent structure. MCP supports several substitution patterns.
+
+### Simple Variable Replacement
+
+```typescript
+function substituteVariables(template: string, variables: Record<string, any>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+    return variables[varName] !== undefined ? variables[varName] : match;
+  });
+}
+
+// Usage
+const template = "Hello {{name}}, welcome to {{company}}!";
+const variables = {
+  name: "Alice",
+  company: "Tech Corp"
+};
+
+const result = substituteVariables(template, variables);
+// Output: "Hello Alice, welcome to Tech Corp!"
+```
+
+### Variable Types and Handling
+
+Different types of variables require different handling strategies:
+
+**String Variables**
+```typescript
+const greetingTemplate = {
+  name: "personal-greeting",
+  template: "{{greeting}}, {{name}}!",
+  variables: ["greeting", "name"]
+};
+
+// Valid substitution
+substituteVariables(greetingTemplate.template, {
+  greeting: "Good morning",
+  name: "Bob"
+});
+// Output: "Good morning, Bob!"
+```
+
+**Code/Markdown Variables**
+```typescript
+const documentationTemplate = {
+  name: "api-docs",
+  template: `## Function: {{functionName}}
+
+\`\`\`{{language}}
+{{codeExample}}
+\`\`\`
+
+{{description}}`,
+  variables: ["functionName", "language", "codeExample", "description"]
+};
+```
+
+**List/Array Variables**
+```typescript
+const checklistTemplate = {
+  name: "project-tasks",
+  template: `Project Checklist:
+{{#each items}}
+- {{this}}
+{{/each}}`,
+  variables: ["items"]
+};
+
+// Usage with markdown lists
+const items = [
+  "Set up development environment",
+  "Write documentation",
+  "Run tests",
+  "Deploy to production"
+];
+
+// Transform to markdown list
+const markdownList = items.map(item => `- ${item}`).join('\n');
+```
+
+## Advanced Template Features
+
+### Conditional Logic
+
+Handle different scenarios based on variable values:
+
+```typescript
+const conditionalTemplate = {
+  name: "user-onboarding",
+  template: `Welcome to our platform!
+
+{{#if userType === 'beginner'}}
+  Here are some getting started resources:
+  - Basic tutorials
+  - FAQ section
+  - Community forum
+{{/if}}
+
+{{#if userType === 'advanced'}}
+  Skip the basics and jump straight to:
+  - Advanced features guide
+  - API documentation
+  - Customization options
+{{/if}}
+
+Common tasks:
+{{#if accountCreated}}
+- Update your profile
+- Join projects
+{{else}}
+- Create your account
+- Verify email
+{{/if}}`,
+  variables: ["userType", "accountCreated"]
+};
+```
+
+### Template Inheritance and Composition
+
+Create reusable template components:
+
+```typescript
+// Base components
+const baseTemplate = {
+  name: "base-response",
+  template: `{{title}}
+
+{{content}}
+
+{{footer}}`,
+  variables: ["title", "content", "footer"]
+};
+
+// Specialized templates
+const errorResponse = {
+  ...baseTemplate,
+  name: "error-response",
+  template: `{{title}}
+
+{{content}}
+
+{{footer}}`,
+  variables: ["title", "content", "footer"]
+};
+
+const successResponse = {
+  ...baseTemplate,
+  name: "success-response",
+  template: `✅ {{title}}
+
+{{content}}
+
+{{footer}}`,
+  variables: ["title", "content", "footer"]
+};
+```
+
+## Template Validation
+
+Ensure templates are properly structured before use:
+
+```typescript
+class TemplateValidator {
+  validateTemplate(template: PromptTemplate): ValidationResult {
+    const errors: string[] = [];
+
+    // Check required fields
+    if (!template.name) errors.push("Name is required");
+    if (!template.description) errors.push("Description is required");
+    if (!template.template) errors.push("Template content is required");
+
+    // Validate variable syntax
+    const templateVariables = this.extractVariables(template.template);
+    const missingVariables = template.variables.filter(v => !templateVariables.includes(v));
+    const extraVariables = templateVariables.filter(v => !template.variables.includes(v));
+
+    if (missingVariables.length > 0) {
+      errors.push(`Missing variable substitution for: ${missingVariables.join(', ')}`);
+    }
+
+    if (extraVariables.length > 0) {
+      errors.push(`Undeclared variables in template: ${extraVariables.join(', ')}`);
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  }
+
+  private extractVariables(template: string): string[] {
+    const matches = template.match(/\{\{(\w+)\}\}/g);
+    return matches ? matches.map(m => m.slice(2, -2)) : [];
+  }
+}
+```
+
+## Real-World Template Examples
+
+### 1. Code Generation Template
+
+```typescript
+const codeGenerationTemplate = {
+  name: "generate-code",
+  description: "Generate code based on requirements",
+  template: `Generate a {{language}} {{componentType}} that {{description}}.
+
+Requirements:
+- {{requirements}}
+- Follow {{language}} best practices
+- Include proper error handling
+- Add clear documentation
+
+Additional context:
+{{additionalContext}}
+
+Please provide:
+1. Complete code implementation
+2. Explanation of key features
+3. Usage examples
+4. Testing suggestions`,
+  variables: ["language", "componentType", "description", "requirements", "additionalContext"],
+  constraints: {
+    format: "markdown",
+    maxLength: 3000
+  }
+};
+```
+
+### 2. Bug Report Template
+
+```typescript
+const bugReportTemplate = {
+  name: "bug-report",
+  description: "Generate detailed bug reports",
+  template: `## Bug Report
+
+**Component:** {{component}}
+**Severity:** {{severity}}
+**Environment:** {{environment}}
+
+### Description
+{{description}}
+
+### Steps to Reproduce
+{{reproductionSteps}}
+
+### Expected Behavior
+{{expectedBehavior}}
+
+### Actual Behavior
+{{actualBehavior}}
+
+### Error Messages
+{{#if errorMessages}}
+\`\`\`
+{{errorMessages}}
+\`\`\`
+{{/if}}
+
+### Additional Context
+{{additionalContext}}
+
+### System Information
+- **OS:** {{os}}
+- **Browser:** {{browser}}
+- **Version:** {{version}}`,
+  variables: [
+    "component", "severity", "environment", "description",
+    "reproductionSteps", "expectedBehavior", "actualBehavior",
+    "errorMessages", "additionalContext", "os", "browser", "version"
+  ]
+};
+```
+
+### 3. Performance Analysis Template
+
+```typescript
+const performanceTemplate = {
+  name: "performance-analysis",
+  description: "Analyze system performance issues",
+  template: `## Performance Analysis Report
+
+### System Overview
+{{systemOverview}}
+
+### Performance Metrics
+| Metric | Current | Target | Status |
+|--------|---------|---------|---------|
+| {{metric1.name}} | {{metric1.current}} | {{metric1.target}} | {{metric1.status}} |
+| {{metric2.name}} | {{metric2.current}} | {{metric2.target}} | {{metric2.status}} |
+| {{metric3.name}} | {{metric3.current}} | {{metric3.target}} | {{metric3.status}} |
+
+### Key Findings
+{{keyFindings}}
+
+### Recommendations
+{{recommendations}}
+
+### Next Steps
+{{nextSteps}}`,
+  variables: [
+    "systemOverview", "metric1", "metric2", "metric3",
+    "keyFindings", "recommendations", "nextSteps"
+  ]
+};
+```
+
+## Template Testing
+
+Create comprehensive tests for your templates:
+
+```typescript
+class TemplateTester {
+  testTemplate(template: PromptTemplate, testCases: TestCase[]): TestResult[] {
+    return testCases.map(test => {
+      try {
+        const result = substituteVariables(template.template, test.variables);
+        const passed = this.validateOutput(result, test.expected);
+
+        return {
+          passed,
+          input: test.variables,
+          output: result,
+          expected: test.expected
+        };
+      } catch (error) {
+        return {
+          passed: false,
+          input: test.variables,
+          output: null,
+          error: error.message
+        };
+      }
+    });
+  }
+
+  private validateOutput(output: string, expected: ExpectedResult): boolean {
+    if (typeof expected === 'string') {
+      return output.includes(expected);
+    }
+
+    if (expected.minLength && output.length < expected.minLength) {
+      return false;
+    }
+
+    if (expected.maxLength && output.length > expected.maxLength) {
+      return false;
+    }
+
+    if (expected.regex && !new RegExp(expected.regex).test(output)) {
+      return false;
+    }
+
+    return true;
+  }
+}
+```
+
+## Best Practices for Templates
+
+### 1. Keep Templates DRY (Don't Repeat Yourself)
+
+```typescript
+// Bad - Repeated content
+const badTemplate1 = {
+  name: "error-template",
+  template: "Error: {{message}} occurred at {{timestamp}}"
+};
+
+const badTemplate2 = {
+  name: "warning-template",
+  template: "Warning: {{message}} occurred at {{timestamp}}"
+};
+
+// Good - Shared base
+const baseTemplate = {
+  name: "log-base",
+  template: "{{level}}: {{message}} occurred at {{timestamp}}"
+};
+
+const errorTemplate = {
+  ...baseTemplate,
+  name: "error-template",
+  template: "Error: {{message}} occurred at {{timestamp}}"
+};
+```
+
+### 2. Use Clear, Descriptive Variable Names
+
+```typescript
+// Good
+const goodTemplate = {
+  name: "user-notification",
+  template: "Hello {{userName}}, your {{notificationType}} {{action}} at {{timestamp}}",
+  variables: ["userName", "notificationType", "action", "timestamp"]
+};
+
+// Bad
+const badTemplate = {
+  name: "notification",
+  template: "Hi {{u}}, your {{nt}} {{a}} at {{t}}",
+  variables: ["u", "nt", "a", "t"] // What do these mean?
+};
+```
+
+### 3. Include Documentation
+
+```typescript
+const wellDocumentedTemplate = {
+  name: "email-confirmation",
+  description: "Generate email confirmation messages for user actions",
+  template: `Confirm your {{action}} on {{platformName}}
+
+Dear {{userName}},
+
+You requested to {{action}} your account on {{platformName}}.
+Please confirm this action by clicking the button below or using the code:
+
+Confirmation Code: {{confirmationCode}}
+
+This code will expire in {{expiryTime}} minutes.
+
+If you didn't request this, please ignore this email.
+
+Thanks,
+The {{platformName}} Team`,
+  variables: [
+    "action",           // The action being performed (e.g., "reset password", "verify email")
+    "platformName",    // Name of the platform/service
+    "userName",        // Display name of the user
+    "confirmationCode", // The confirmation code
+    "expiryTime"       // Time in minutes until code expires
+  ],
+  usage: {
+    example: {
+      action: "reset your password",
+      platformName: "MyApp",
+      userName: "John Doe",
+      confirmationCode: "ABC123",
+      expiryTime: 30
+    }
+  }
+};
+```
+
+
+

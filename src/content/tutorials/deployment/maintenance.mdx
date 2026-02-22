@@ -1,0 +1,727 @@
+---
+title: "Azure Deployment"
+description: "Deploy MCP servers to Azure Container Apps with full CI/CD pipeline"
+---
+
+# Azure Deployment
+
+Azure Container Apps provides a serverless container service that makes it easy to deploy and manage MCP servers with automatic scaling, built-in monitoring, and CI/CD integration. This guide will walk you through deploying an MCP server to Azure from scratch.
+
+## Azure Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Azure Architecture                         │
+│                                                                     │
+│     Internet                                                         │
+│         │                                                             │
+│         ▼                                                             │
+│   ┌─────────────────────────────────────────────────────────────────┐ │
+│   │ Azure Load Balancer                                            │ │
+│   │                                                                 │ │
+│   │   ┌─────────────────────────────────────────────────────────────┐│ │
+│   │   │   Azure Container App (MCP Server)                       ││ │
+│   │   │   ┌───────────────────────────────────────────────────────┐│ │
+│   │   │   │   Container Runtime                                   ││ │
+│   │   │   │   ┌───────────────────────────────────────────────────┐│ │
+│   │   │   │   │   MCP Server Application                        ││ │
+│   │   │   │   │   ┌─────────────────────────────────────────────┐│ │
+│   │   │   │   │   │   HTTP + stdio transports                 ││ │
+│   │   │   │   │   │   Tools & Resources                       ││ │
+│   │   │   │   │   └─────────────────────────────────────────────┘│ │
+│   │   │   │   └───────────────────────────────────────────────────┘│ │
+│   │   │   └───────────────────────────────────────────────────────┘│ │
+│   │   │                                                           │ │
+│   │   │   Scaling Configuration                                    │ │
+│   │   │   ┌───────────────────────────────────────────────────────┐│ │
+│   │   │   │   CPU: 0.25-4 cores per revision                     ││ │
+│   │   │   │   Memory: 0.5-8 GB per revision                      ││ │
+│   │   │   │   Instances: 0-100 (auto-scale)                     ││ │
+│   │   │   └───────────────────────────────────────────────────────┘│ │
+│   │   │                                                           │ │
+│   │   │   Environment Variables & Secrets                        │ │
+│   │   │   ┌───────────────────────────────────────────────────────┐│ │
+│   │   │   │   NODE_ENV=production                                ││ │
+│   │   │   │   API_KEY=*** (secret)                             ││ │
+│   │   │   │   LOG_LEVEL=info                                    ││ │
+│   │   │   └───────────────────────────────────────────────────────┘│ │
+│   │   └─────────────────────────────────────────────────────────────┘│ │
+│   │                                                                 │ │
+│   │   Azure Application Insights                                  │ │
+│   │   ┌─────────────────────────────────────────────────────────┐│ │
+│   │   │   Logs & Metrics                                      ││ │
+│   │   │   Performance Monitoring                              ││ │
+│   │   │   Error Tracking                                       ││ │
+│   │   └─────────────────────────────────────────────────────────┘│ │
+│   │                                                                 │ │
+│   └─────────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│   Azure CI/CD Pipeline                                             │
+│   ┌─────────────────────────────────────────────────────────────────┐ │
+│   │ GitHub Actions → Build → Test → Deploy → Monitor              │ │
+│   └─────────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## Prerequisites
+
+1. **Azure Account**: Sign up for free at [azure.com](https://azure.com)
+2. **Azure CLI**: Install and configure Azure CLI
+3. **GitHub Account**: For CI/CD integration
+4. **Docker Hub**: For container registry
+
+### Install Azure CLI
+
+```bash
+# macOS with Homebrew
+brew install azure-cli
+
+# Linux (Ubuntu)
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+# Verify installation
+az --version
+```
+
+### Login to Azure
+
+```bash
+# Login to Azure
+az login
+
+# Set subscription (if needed)
+az account set --subscription "your-subscription-id"
+
+# Create resource group
+az group create --name mcp-rg --location eastus
+```
+
+## Step 1: Create Docker Image
+
+### Enhanced Dockerfile for Azure
+
+```dockerfile
+# Dockerfile
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN npm run build
+
+# Production stage
+FROM node:18-alpine AS production
+
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S mcpuser -u 1001
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy built application
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/config /app/data
+
+# Copy configuration files
+COPY --chown=mcpuser:nodejs ./config ./config
+
+# Set permissions
+RUN chown -R mcpuser:nodejs /app
+
+# Switch to non-root user
+USER mcpuser
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+# Azure-specific logging
+ENV LOG_LEVEL=info
+ENV NODE_ENV=production
+
+# Start the application
+CMD ["node", "dist/http-server.js"]
+```
+
+### Build and Push to Container Registry
+
+```bash
+# Build Docker image
+docker build -t mcp-server:latest .
+
+# Tag for Azure Container Registry
+docker tag mcp-server:latest mcpserver.azurecr.io/mcp-server:latest
+
+# Login to ACR (Azure Container Registry)
+az acr login --name mcpserver
+
+# Push to ACR
+docker push mcpserver.azurecr.io/mcp-server:latest
+
+# Verify push
+az acr repository list --name mcpserver --output table
+```
+
+## Step 2: Create Azure Container App
+
+### Configure Environment Variables
+
+```yaml
+# mcp-environment.yaml
+location: eastus
+name: mcp-environment
+properties:
+  kind: Container Apps
+  properties:
+    platformDomainSuffix:.azurecontainerapps.io
+    appLogsConfiguration:
+      destination: log-analytics
+      logAnalyticsConfiguration:
+        customerId: "${LOG_ANALYTICS_WORKSPACE_CUSTOMER_ID}"
+        sharedKey: "${LOG_ANALYTICS_WORKSPACE_SHARED_KEY}"
+    dapr:
+      enabled: false
+    monitoring:
+      destinations:
+        - type: log-analytics
+          name: ${LOG_ANALYTICS_WORKSPACE_NAME}
+    tags:
+      environment: production
+```
+
+### Create Container App with Infrastructure as Code
+
+```bash
+# Create Container App Environment
+az deployment group create \
+  --resource-group mcp-rg \
+  --template-file environment.json \
+  --parameters environment.json
+
+# Create Container App
+az containerapp create \
+  --name mcp-server-app \
+  --resource-group mcp-rg \
+  --environment mcp-environment \
+  --image mcpserver.azurecr.io/mcp-server:latest \
+  --ingress 'external' \
+  --target-port 3000 \
+  --min-replicas 1 \
+  --max-replicas 10 \
+  --scale-rule-type http \
+  --scale-rule-http-concurrent-target 50 \
+  --scale-rule-http-auth-failure-condition false \
+  --cpu 0.25 \
+  --memory 0.5 \
+  --secrets "API_KEY=${API_KEY}" \
+  --env-vars "NODE_ENV=production" "LOG_LEVEL=info" "API_URL=https://mcp-server-app.${MCP_ENVIRONMENT}.azurecontainerapps.io"
+```
+
+### Infrastructure as Code (Terraform)
+
+```hcl
+# main.tf
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+}
+
+resource "azurerm_resource_group" "mcp_rg" {
+  name     = "mcp-rg"
+  location = "eastus"
+}
+
+resource "azurerm_log_analytics_workspace" "mcp_logs" {
+  name                = "mcp-logs"
+  resource_group_name = azurerm_resource_group.mcp_rg.name
+  location            = azurerm_resource_group.mcp_rg.location
+  sku                 = "PerGB2018"
+}
+
+resource "azurerm_application_insights" "mcp_ai" {
+  name                = "mcp-ai"
+  location            = azurerm_resource_group.mcp_rg.location
+  resource_group_name = azurerm_resource_group.mcp_rg.name
+  workspace_id        = azurerm_log_analytics_workspace.mcp_logs.id
+  application_type    = "web"
+}
+
+resource "azurerm_container_app_environment" "mcp_env" {
+  name                = "mcp-environment"
+  resource_group_name = azurerm_resource_group.mcp_rg.name
+  location            = azurerm_resource_group.mcp_rg.location
+
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.mcp_logs.id
+}
+
+resource "azurerm_container_app" "mcp_server" {
+  name                = "mcp-server-app"
+  resource_group_name = azurerm_resource_group.mcp_rg.name
+  container_app_environment_id = azurerm_container_app_environment.mcp_env.id
+  revision_mode       = "Single"
+
+  ingress {
+    external = true
+    target_port = 3000
+    traffic_weight {
+      latest_revision = true
+      percentage      = 100
+    }
+  }
+
+  template {
+    container {
+      name   = "mcp-server"
+      image  = "mcpserver.azurecr.io/mcp-server:latest"
+      cpu    = "0.25"
+      memory = "0.5Gi"
+
+      env {
+        name  = "NODE_ENV"
+        value = "production"
+      }
+
+      env {
+        name  = "LOG_LEVEL"
+        value = "info"
+      }
+
+      env {
+        name  = "APPLICATIONINSIGHTS_CONNECTION_STRING"
+        value = azurerm_application_insights.mcp_ai.connection_string
+      }
+
+      env {
+        name = "API_KEY"
+        secret_ref = "api-key-secret"
+      }
+    }
+
+    secrets {
+      name = "api-key-secret"
+      value = var.api_key
+    }
+
+    scale {
+      min_replicas = 1
+      max_replicas = 10
+      rules {
+        http {
+          concurrent_requests = 50
+        }
+      }
+    }
+  }
+}
+```
+
+## Step 3: CI/CD Pipeline with GitHub Actions
+
+### GitHub Actions Workflow
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy MCP Server to Azure
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: mcpserver.azurecr.io
+  IMAGE_NAME: mcp-server
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Azure Container Registry
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy-to-azure:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Update Container App
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          az containerapp update \
+            --name mcp-server-app \
+            --resource-group mcp-rg \
+            --image mcpserver.azurecr.io/mcp-server:${{ github.sha }}
+```
+
+### Secrets Configuration
+
+In GitHub repository settings, add these secrets:
+
+- `AZURE_CREDENTIALS`: Service principal credentials for Azure
+- `API_KEY`: Your MCP API key
+
+## Step 4: Monitoring and Observability
+
+### Application Insights Configuration
+
+```typescript
+// src/monitoring.ts
+import appInsights from 'applicationinsights';
+
+export function initializeMonitoring() {
+  appInsights.setup().start();
+
+  appInsights.defaultClient.config.appName = 'MCP Server';
+  appInsights.defaultClient.config.instrumentationKey = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
+
+  // Track HTTP requests
+  appInsights.defaultClient.autoCollectRequests = true;
+  appInsights.defaultClient.autoCollectPerformance = true;
+  appInsights.defaultClient.autoCollectExceptions = true;
+  appInsights.defaultClient.autoCollectDependencies = true;
+
+  return appInsights;
+}
+
+export function trackMetric(name: string, value: number, properties?: { [key: string]: any }) {
+  appInsights.defaultClient.trackMetric({ name, value, properties });
+}
+
+export function trackException(error: Error, properties?: { [key: string]: any }) {
+  appInsights.defaultClient.trackException({ exception: error, properties });
+}
+```
+
+### Enhanced HTTP Server with Monitoring
+
+```typescript
+// src/http-server.ts
+import { trackMetric, trackException } from './monitoring';
+
+// Initialize monitoring
+initializeMonitoring();
+
+// Update request handling with tracking
+httpServer.on("request", (req, res) => {
+  const startTime = Date.now();
+
+  // Track request
+  trackMetric('http.request', 1, {
+    method: req.method,
+    url: req.url,
+    userAgent: req.headers['user-agent']
+  });
+
+  // Response tracking
+  res.on('finish', () => {
+    const duration = Date.now() - startTime;
+    trackMetric('http.response.time', duration, {
+      method: req.method,
+      url: req.url,
+      statusCode: res.statusCode
+    });
+  });
+
+  if (req.url === "/health") {
+    res.writeHead(200);
+    res.json({ status: "healthy", timestamp: new Date().toISOString() });
+  } else if (req.url === "/mcp") {
+    const transport = new HTTPServerTransport(req, res);
+    server.connect(transport);
+  } else {
+    res.writeHead(404);
+    res.end("Not found");
+  }
+});
+
+// Error handling
+process.on('uncaughtException', (error) => {
+  trackException(error, { type: 'uncaughtException' });
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  trackException(new Error('Unhandled Rejection'), {
+    reason: reason,
+    promise: promise.toString()
+  });
+});
+```
+
+## Step 5: Production Configuration
+
+### Azure Policy and Security
+
+```bash
+# Create managed identity
+az identity create --resource-group mcp-rg --name mcp-server-identity
+
+# Assign permissions to managed identity
+az role assignment create \
+  --resource-group mcp-rg \
+  --role "Contributor" \
+  --assignee $(az identity show --name mcp-server-identity --resource-group mcp-rg --query principalId --output tsv)
+
+# Enable Azure Advisor recommendations
+az advisor configuration create \
+  --name "mcp-advisor" \
+  --resource-group mcp-rg \
+  --category "Cost" \
+  --impact "High" \
+  --enabled
+```
+
+### Cost Optimization
+
+```hcl
+# cost-optimization.tf
+resource "azurerm_container_app" "mcp_server_optimized" {
+  # ... existing configuration ...
+
+  template {
+    # ... container configuration ...
+
+    scale {
+      min_replicas = 0
+      max_replicas = 10
+      rules {
+        http {
+          concurrent_requests = 50
+        }
+        # Idle timeout - scale down when no requests
+        # This requires Dapr or custom implementation
+      }
+    }
+  }
+
+  # Enable spot instances for cost savings
+  spot_instance = true
+}
+```
+
+## Step 6: Testing the Deployment
+
+### Health Check
+
+```bash
+# Test health endpoint
+curl -s http://mcp-server-app.${MCP_ENVIRONMENT}.azurecontainerapps.io/health
+# Response: {"status":"healthy","timestamp":"2024-01-01T00:00:00.000Z"}
+
+# Test MCP endpoint
+curl -X POST http://mcp-server-app.${MCP_ENVIRONMENT}.azurecontainerapps.io/mcp \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: ${API_KEY}" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list",
+    "params": {}
+  }'
+```
+
+### Performance Testing
+
+```bash
+# Install k6 for load testing
+npm install -g k6
+
+# Create load test script
+# load-test.js
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+
+export let options = {
+  stages: [
+    { duration: '30s', target: 10 },
+    { duration: '1m', target: 50 },
+    { duration: '30s', target: 100 },
+    { duration: '1m', target: 50 },
+    { duration: '30s', target: 0 },
+  ],
+};
+
+export default function () {
+  const url = 'http://mcp-server-app.azurecontainerapps.io/mcp';
+  const payload = JSON.stringify({
+    jsonrpc: "2.0",
+    id: Date.now(),
+    method: "tools/list",
+    params: {}
+  });
+
+  const params = {
+    headers: { 'Content-Type': 'application/json' },
+  };
+
+  let response = http.post(url, payload, params);
+
+  check(response, {
+    'status is 200': (r) => r.status === 200,
+    'response time < 500ms': (r) => r.timings.duration < 500,
+    'response time < 1s': (r) => r.timings.duration < 1000,
+  });
+
+  sleep(1);
+}
+```
+
+### Run Load Test
+
+```bash
+k6 run load-test.js --out cloud
+```
+
+## Troubleshooting Azure Deployment
+
+### Common Issues and Solutions
+
+**Problem**: Container app won't start
+```bash
+# Check logs
+az containerapp logs --name mcp-server-app --resource-group mcp-rg --follow
+
+# Check deployment status
+az containerapp revision list --name mcp-server-app --resource-group mcp-rg --output table
+```
+
+**Problem**: Scaling not working
+```bash
+# Check scaling configuration
+az containerapp revision list --name mcp-server-app --resource-group mcp-rg --query "[].{name:name,replicas:replicas}" --output table
+
+# Monitor metrics
+az monitor metrics list \
+  --resource-group mcp-rg \
+  --resource-type Microsoft.App/containerApps \
+  --name "ConcurrentRequests" \
+  --interval PT1M
+```
+
+**Problem**: Connection issues
+```bash
+# Test connectivity
+az containerapp revision list --name mcp-server-app --resource-group mcp-rg --output table
+
+# Check DNS
+dig mcp-server-app.azurecontainerapps.io
+```
+
+### Azure Diagnostics
+
+```bash
+# Enable diagnostics
+az deployment group create \
+  --resource-group mcp-rg \
+  --template-file diagnostics.json \
+  --parameters diagnostics.json
+
+# Monitor with Azure Monitor
+az monitor diagnostic-settings create \
+  --resource-group mcp-rg \
+  --resource-type Microsoft.App/containerApps \
+  --resource-name mcp-server-app \
+  --name mcp-diagnostics \
+  --metrics '[{"category": "All", "enabled": true, "timeGrain": "PT1M"}]' \
+  --logs '[{"category": "AppConsoleLogs", "enabled": true}]'
+```
+
+
+
+## Complete Project Structure
+
+```
+mcp-azure-deployment/
+├── main.tf                 # Terraform configuration
+├── variables.tf           # Terraform variables
+├── docker-compose.yml      # Local development
+├── Dockerfile             # Container build
+├── .github/
+│   └── workflows/
+│       └── deploy.yml     # GitHub Actions CI/CD
+├── src/
+│   ├── http-server.ts     # HTTP server implementation
+│   ├── server.ts          # MCP server logic
+│   ├── monitoring.ts      # Application Insights integration
+│   └── logging.ts         # Winston logging
+├── config/
+│   └── mcp.json           # MCP configuration
+├── infrastructure/
+│   ├── environment.json   # Container App Environment
+│   └── diagnostics.json   # Diagnostic settings
+├── scripts/
+│   ├── deploy.sh          # Deployment script
+│   └── monitor.sh         # Monitoring script
+└── README.md
+```

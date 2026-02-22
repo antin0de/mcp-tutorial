@@ -1,0 +1,191 @@
+---
+title: "Project Setup"
+description: "Initialize your TypeScript project with MCP dependencies"
+section: 1
+estimatedTime: 15
+---
+
+# Section 1: Project Setup
+
+Welcome to the first section of your MCP server tutorial! In this section, we'll set up your development environment and create a proper TypeScript project structure for building MCP servers.
+
+## Learning Objectives
+
+By the end of this section, you will be able to:
+
+- Initialize a new TypeScript project
+- Install the @modelcontextprotocol/sdk
+- Configure tsconfig.json for MCP development
+- Create a basic project structure
+
+## Step 1: Create Project Directory
+
+First, let's create a dedicated directory for our MCP server project:
+
+```bash
+mkdir first-mcp-server
+cd first-mcp-server
+```
+
+## Step 2: Initialize Node.js Project
+
+Now, let's initialize a new Node.js project:
+
+```bash
+npm init -y
+```
+
+This creates a `package.json` file with default settings.
+
+## Step 3: Install Dependencies
+
+We need two main dependencies:
+
+1. **@modelcontextprotocol/sdk** - The official MCP SDK for TypeScript
+2. **@types/node** - TypeScript types for Node.js
+
+Install them with:
+
+```bash
+npm install @modelcontextprotocol/sdk @types/node
+```
+
+Your `package.json` should now include these dependencies:
+
+```json
+{
+  "name": "first-mcp-server",
+  "version": "1.0.0",
+  "description": "My first MCP server",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  }
+}
+```
+
+## Step 4: Configure TypeScript
+
+Create a `tsconfig.json` file to configure TypeScript for MCP development:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    "sourceMap": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+This configuration:
+- Sets the target to ES2022 for modern JavaScript features
+- Uses ESNext modules for better compatibility
+- Enables strict type checking
+- Outputs compiled code to the `dist` directory
+- Includes JSON module resolution (important for MCP)
+
+## Step 5: Create Project Structure
+
+Now, let's create the basic directory structure:
+
+```bash
+mkdir -p src
+mkdir -p dist
+```
+
+Create an empty `src/index.ts` file:
+
+```typescript
+// src/index.ts - This will contain our MCP server code
+console.log("MCP Server starting...");
+```
+
+## Step 6: Install tsx for Development
+
+For easier development, let's install `tsx` which allows us to run TypeScript files directly:
+
+```bash
+npm install --save-dev tsx
+```
+
+Update your `package.json` scripts:
+
+```json
+{
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  }
+}
+```
+
+## Step 7: Verify Setup
+
+Let's verify our setup is working by running the development server:
+
+```bash
+npm run dev
+```
+
+You should see:
+
+```
+MCP Server starting...
+```
+
+Perfect! Your basic TypeScript project is ready for MCP development.
+
+## Directory Structure
+
+Your project should now look like this:
+
+```
+first-mcp-server/
+├── node_modules/
+├── src/
+│   └── index.ts
+├── dist/
+├── package.json
+├── tsconfig.json
+└── package-lock.json
+```
+
+---
+
+## Summary
+
+In this section, we've successfully set up your TypeScript project for MCP server development. We've installed the necessary dependencies and configured TypeScript to work well with MCP development.
+
+Key accomplishments:
+- ✅ Created a new Node.js project
+- ✅ Installed @modelcontextprotocol/sdk
+- ✅ Configured TypeScript with appropriate settings
+- ✅ Set up the basic project structure
+- ✅ Verified the setup works
+
+## Next Steps
+
+In the next section, we'll create the basic MCP server structure that can respond to protocol messages using the stdio transport method.
+---

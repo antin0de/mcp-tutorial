@@ -1,0 +1,231 @@
+# Essential Development Tools
+
+A productive development environment is crucial for building MCP servers efficiently. This section covers the essential tools you'll need.
+
+## Version Control: Git
+
+<Callout type="warning">
+**Essential**: Git is required for version control. If you're new to Git, don't worry—we'll cover the basics you need.
+</Callout>
+
+### Installing Git
+
+**macOS**:
+```bash
+# Git comes with Xcode Command Line Tools
+xcode-select --install
+```
+
+**Windows**:
+Download from [git-scm.com](https://git-scm.com/download/win)
+
+**Linux**:
+```bash
+sudo apt install git  # Ubuntu/Debian
+sudo yum install git  # Fedora/CentOS
+```
+
+### Basic Git Commands
+
+```bash
+# Initialize a repository
+git init
+
+# Check status
+git status
+
+# Stage changes
+git add .
+
+# Commit changes
+git commit -m "Initial commit"
+
+# Create a branch
+git checkout -b feature/my-feature
+
+# Push to remote
+git push origin feature/my-feature
+```
+
+## Code Editor: VS Code
+
+[Visual Studio Code](https://code.visualstudio.com/) is the recommended editor for MCP development.
+
+### Essential Extensions
+
+Install these VS Code extensions:
+
+1. **ESLint** - JavaScript/TypeScript linting
+2. **Prettier** - Code formatting
+3. **TypeScript Importer** - Auto-import types
+4. **MCP Inspector** - Test MCP servers (coming soon)
+
+### VS Code Configuration
+
+Create `.vscode/settings.json`:
+
+```json
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  }
+}
+```
+
+## Package Management
+
+### npm (Node Package Manager)
+
+Comes with Node.js. Essential commands:
+
+```bash
+# Install dependencies
+npm install
+
+# Install a specific package
+npm install package-name
+
+# Install development dependency
+npm install --save-dev package-name
+
+# Install global package
+npm install -g package-name
+
+# Run scripts
+npm run <script-name>
+```
+
+### Alternative: pnpm
+
+Faster and more disk-efficient:
+
+```bash
+npm install -g pnpm
+pnpm install
+```
+
+## Terminal Tips
+
+### macOS/Linux
+
+- Use `Ctrl+A` to move to the beginning of line
+- Use `Ctrl+E` to move to the end of line
+- Use `Ctrl+R` to search command history
+- Use `Tab` for auto-completion
+
+### Useful Aliases
+
+Add to your `~/.zshrc` or `~/.bashrc`:
+
+```bash
+# Git aliases
+alias gs='git status'
+alias ga='git add'
+alias gc='git commit -m'
+alias gp='git push'
+
+# NPM aliases
+alias ni='npm install'
+alias nid='npm install --save-dev'
+alias nrs='npm run start'
+alias nrb='npm run build'
+```
+
+## Development Server
+
+Run your MCP server in development mode with auto-reload:
+
+```bash
+# Install ts-node-dev
+npm install --save-dev ts-node-dev
+
+# Add script to package.json
+# "dev": "ts-node-dev --respawn src/index.ts"
+
+# Run
+npm run dev
+```
+
+## Testing Tools
+
+### Unit Testing
+
+```bash
+# Install Jest
+npm install --save-dev jest @types/jest ts-jest
+
+# Initialize Jest
+npx ts-jest config:init
+
+# Run tests
+npm test
+```
+
+### MCP Inspector
+
+The official MCP Inspector lets you test your server interactively:
+
+```bash
+npx @modelcontextprotocol/inspector node dist/index.js
+```
+
+## Debugging
+
+### VS Code Debugger
+
+Create `.vscode/launch.json`:
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug MCP Server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--nolazy", "-r", "ts-node/register"],
+      "args": ["src/index.ts"],
+      "internalConsoleOptions": "openOnSessionStart",
+      "skipFiles": ["<node_internals>/**", "node_modules/**"]
+    }
+  ]
+}
+```
+
+### Console Logging
+
+```typescript
+console.log('Info:', data);
+console.error('Error:', error);
+console.warn('Warning:', warning);
+```
+
+## Environment Variables
+
+Use `.env` files for configuration:
+
+```bash
+# .env
+PORT=3000
+NODE_ENV=development
+API_KEY=your_api_key_here
+```
+
+Load with `dotenv`:
+
+```typescript
+import dotenv from 'dotenv';
+dotenv.config();
+
+const port = process.env.PORT || 3000;
+```
+
+## Next Steps
+
+With your tools set up, let's understand how MCP projects are structured.
+

@@ -1,0 +1,930 @@
+---
+title: "MCP Tools"
+description: "Understanding how MCP enables function execution through Tools"
+---
+
+# MCP Tools
+
+## Introduction to Tools
+
+**Tools** are the action-oriented components of MCP that enable AI systems to perform specific operations and execute functions. While Resources expose data, Tools enable AI models to "do" things - read files, write data, make API calls, and perform any action that your server implements.
+
+### What is a Tool?
+
+A Tool in MCP is a well-defined function that an AI system can call with specific parameters. Each Tool has:
+
+- **Name**: Unique identifier for the tool
+- **Description**: Human-readable explanation of what the tool does
+- **Input Schema**: Definition of required and optional parameters
+- **Implementation**: The actual function logic
+
+```typescript
+// Example Tool definition
+const tool = {
+  name: "calculate-sum",
+  description: "Calculate the sum of two numbers",
+  inputSchema: {
+    type: "object",
+    properties: {
+      a: { type: "number", description: "First number" },
+      b: { type: "number", description: "Second number" }
+    },
+    required: ["a", "b"]
+  },
+  async execute({ a, b }) {
+    return { result: a + b };
+  }
+};
+```
+
+## Tool Architecture
+
+### Tool Components
+
+```typescript
+interface Tool {
+  name: string;                    // Unique identifier
+  description: string;           // Human-readable description
+  inputSchema: JSONSchema;       // Input parameter schema
+  outputSchema?: JSONSchema;     // Expected output structure (optional)
+  execute: ToolFunction;         // Implementation function
+}
+
+type ToolFunction = (args: any) => Promise<ToolResult>;
+```
+
+### Tool Result Format
+
+All Tools return results in a standardized format:
+
+```typescript
+interface ToolResult {
+  content: ToolContent[];        // Response content
+  isError?: boolean;             // Error flag
+  isErrorDetailed?: string;      // Detailed error message
+}
+```
+
+## Types of Tools
+
+### 1. System Tools
+
+Tools that interact with the underlying system:
+
+```typescript
+// File system tool
+const readFileTool: Tool = {
+  name: "read-file",
+  description: "Read the contents of a file",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: {
+        type: "string",
+        description: "Path to the file to read"
+      }
+    },
+    required: ["path"]
+  },
+  async execute({ path }) {
+    try {
+      const content = await fs.readFile(path, 'utf-8');
+      return {
+        content: [{
+          type: "text",
+          text: `File contents:\n${content}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `Error reading file: ${error.message}`
+        }],
+        isError: true,
+        isErrorDetailed: error.message
+      };
+    }
+  }
+};
+```
+
+### 2. API Tools
+
+Tools that communicate with external APIs:
+
+```typescript
+// API integration tool
+const fetchWeatherTool: Tool = {
+  name: "fetch-weather",
+  description: "Get current weather for a city",
+  inputSchema: {
+    type: "object",
+    properties: {
+      city: {
+        type: "string",
+        description: "Name of the city"
+      },
+      units: {
+        type: "string",
+        enum: ["metric", "imperial"],
+        default: "metric"
+      }
+    },
+    required: ["city"]
+  },
+  async execute({ city, units = "metric" }) {
+    try {
+      const response = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=${units}&appid=${API_KEY}`
+      );
+
+      const data = await response.json();
+
+      return {
+        content: [{
+          type: "text",
+          text: `Weather in ${city}: ${data.weather[0].description}, ${data.main.temp}°${units === 'metric' ? 'C' : 'F'}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `Error fetching weather: ${error.message}`
+        }],
+        isError: true,
+        isErrorDetailed: error.message
+      };
+    }
+  }
+};
+```
+
+### 3. Database Tools
+
+Tools for database operations:
+
+```typescript
+// Database query tool
+const executeQueryTool: Tool = {
+  name: "execute-query",
+  description: "Execute a SQL query on the database",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "SQL query to execute"
+      },
+      parameters: {
+        type: "array",
+        items: { type: "any" },
+        description: "Query parameters"
+      }
+    },
+    required: ["query"]
+  },
+  async execute({ query, parameters = [] }) {
+    try {
+      const result = await db.query(query, parameters);
+
+      return {
+        content: [{
+          type: "json",
+          json: result.rows
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `Query execution error: ${error.message}`
+        }],
+        isError: true,
+        isErrorDetailed: error.message
+      };
+    }
+  }
+};
+```
+
+### 4. Processing Tools
+
+Tools that perform data processing or transformations:
+
+```typescript
+// Data processing tool
+const processCsvTool: Tool = {
+  name: "process-csv",
+  description: "Process and analyze CSV data",
+  inputSchema: {
+    type: "object",
+    properties: {
+      csvData: {
+        type: "string",
+        description: "CSV data as string"
+      },
+      operation: {
+        type: "string",
+        enum: ["sum", "average", "count", "group"],
+        description: "Processing operation to perform"
+      },
+      column: {
+        type: "string",
+        description: "Column to operate on (for sum/average/count)"
+      }
+    },
+    required: ["csvData", "operation"]
+  },
+  async execute({ csvData, operation, column }) {
+    try {
+      const rows = parseCSV(csvData);
+      let result;
+
+      switch (operation) {
+        case "sum":
+          const values = rows.map(row => parseFloat(row[column])).filter(v => !isNaN(v));
+          result = { sum: values.reduce((a, b) => a + b, 0) };
+          break;
+        case "average":
+          const vals = rows.map(row => parseFloat(row[column])).filter(v => !isNaN(v));
+          result = { average: vals.reduce((a, b) => a + b, 0) / vals.length };
+          break;
+        case "count":
+          result = { count: rows.length };
+          break;
+        case "group":
+          const groups = rows.reduce((acc, row) => {
+            const key = row[column];
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+          }, {});
+          result = groups;
+          break;
+      }
+
+      return {
+        content: [{
+          type: "json",
+          json: result
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `CSV processing error: ${error.message}`
+        }],
+        isError: true,
+        isErrorDetailed: error.message
+      };
+    }
+  }
+};
+```
+
+## Implementing Tools
+
+### Basic Tool Server
+
+```typescript
+import { MCPServer } from "@modelcontextprotocol/sdk/server/index.js";
+
+class SimpleToolServer extends MCPServer {
+  constructor() {
+    super({
+      name: "simple-tools",
+      version: "1.0.0"
+    });
+
+    // Register tools
+    this.registerTool({
+      name: "echo",
+      description: "Echo back the input text",
+      inputSchema: {
+        type: "object",
+        properties: {
+          text: {
+            type: "string",
+            description: "Text to echo back"
+          }
+        },
+        required: ["text"]
+      },
+      async execute({ text }) {
+        return {
+          content: [{
+            type: "text",
+            text: `Echo: ${text}`
+          }]
+        };
+      }
+    });
+
+    this.registerTool({
+      name: "calculate",
+      description: "Perform mathematical calculations",
+      inputSchema: {
+        type: "object",
+        properties: {
+          expression: {
+            type: "string",
+            description: "Mathematical expression to evaluate (e.g., '2 + 2 * 3')"
+          }
+        },
+        required: ["expression"]
+      },
+      async execute({ expression }) {
+        try {
+          // Safe evaluation of math expressions
+          const result = eval(expression);
+          return {
+            content: [{
+              type: "text",
+              text: `Result: ${result}`
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text",
+              text: `Calculation error: ${error.message}`
+            }],
+            isError: true,
+            isErrorDetailed: error.message
+          };
+        }
+      }
+    });
+  }
+}
+```
+
+### Advanced Tool Server with Error Handling
+
+```typescript
+class RobustToolServer extends MCPServer {
+  constructor() {
+    super({
+      name: "robust-tools",
+      version: "1.0.0"
+    });
+
+    this.registerTool({
+      name: "file-search",
+      description: "Search for files in a directory",
+      inputSchema: {
+        type: "object",
+        properties: {
+          directory: {
+            type: "string",
+            description: "Directory to search in"
+          },
+          pattern: {
+            type: "string",
+            description: "File pattern to match (supports wildcards)"
+          },
+          recursive: {
+            type: "boolean",
+            default: true,
+            description: "Search recursively in subdirectories"
+          }
+        },
+        required: ["directory"]
+      },
+      async execute({ directory, pattern = "*", recursive = true }) {
+        try {
+          // Validate directory exists
+          await fs.access(directory);
+
+          // Search for files
+          const files = await this.findFiles(directory, pattern, recursive);
+
+          return {
+            content: [{
+              type: "json",
+              json: {
+                found: files.length,
+                files: files
+              }
+            }]
+          };
+        } catch (error) {
+          // Handle specific error types
+          let errorMessage = "File search failed";
+          let isDetailedError = false;
+
+          if (error.code === 'ENOENT') {
+            errorMessage = "Directory not found";
+          } else if (error.code === 'EACCES') {
+            errorMessage = "Permission denied";
+            isDetailedError = true;
+          }
+
+          return {
+            content: [{
+              type: "text",
+              text: errorMessage
+            }],
+            isError: true,
+            isErrorDetailed: isDetailedError ? error.message : undefined
+          };
+        }
+      }
+    });
+  }
+
+  private async findFiles(directory: string, pattern: string, recursive: boolean): Promise<string[]> {
+    // Implementation file search logic
+    const files: string[] = [];
+
+    // ... actual file search implementation
+
+    return files;
+  }
+}
+```
+
+## Tool Schema Design
+
+### Input Schema Best Practices
+
+```typescript
+// Good schema design
+const wellDesignedSchema = {
+  name: "create-user",
+  description: "Create a new user account",
+  inputSchema: {
+    type: "object",
+    properties: {
+      username: {
+        type: "string",
+        description: "Unique username for the account",
+        minLength: 3,
+        maxLength: 50
+      },
+      email: {
+        type: "string",
+        description: "User's email address",
+        format: "email"
+      },
+      role: {
+        type: "string",
+        enum: ["admin", "user", "guest"],
+        default: "user",
+        description: "User role in the system"
+      },
+      preferences: {
+        type: "object",
+        properties: {
+          theme: {
+            type: "string",
+            enum: ["light", "dark", "auto"],
+            default: "auto"
+          },
+          notifications: {
+            type: "boolean",
+            default: true
+          }
+        }
+      }
+    },
+    required: ["username", "email"],
+    additionalProperties: false // Prevent unexpected properties
+  }
+};
+```
+
+### Output Schema Design
+
+```typescript
+// Tool with defined output schema
+const toolWithOutputSchema = {
+  name: "analyze-text",
+  description: "Analyze text for sentiment and key topics",
+  inputSchema: {
+    type: "object",
+    properties: {
+      text: {
+        type: "string",
+        description: "Text to analyze"
+      }
+    },
+    required: ["text"]
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      sentiment: {
+        type: "object",
+        properties: {
+          score: { type: "number" },
+          label: { type: "string", enum: ["positive", "negative", "neutral"] }
+        }
+      },
+      topics: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            topic: { type: "string" },
+            keywords: { type: "array", items: { type: "string" } },
+            relevance: { type: "number" }
+          }
+        }
+      },
+      wordCount: { type: "number" },
+      readingTime: { type: "number" }
+    }
+  },
+  async execute({ text }) {
+    // Analyze text and return structured results
+    const sentiment = this.analyzeSentiment(text);
+    const topics = this.extractTopics(text);
+    const wordCount = this.countWords(text);
+    const readingTime = this.calculateReadingTime(text);
+
+    return {
+      content: [{
+        type: "json",
+        json: {
+          sentiment,
+          topics,
+          wordCount,
+          readingTime
+        }
+      }]
+    };
+  }
+};
+```
+
+## Tool Security Considerations
+
+### Input Validation
+
+```typescript
+class SecureToolServer extends MCPServer {
+  async executeTool(toolName: string, args: any): Promise<ToolResult> {
+    const tool = this.tools.get(toolName);
+    if (!tool) {
+      throw new Error(`Tool not found: ${toolName}`);
+    }
+
+    // Validate input schema
+    const validationResult = this.validateInput(tool.inputSchema, args);
+    if (!validationResult.valid) {
+      return {
+        content: [{
+          type: "text",
+          text: `Input validation failed: ${validationResult.error}`
+        }],
+        isError: true,
+        isErrorDetailed: validationResult.error
+      };
+    }
+
+    // Sanitize inputs for security
+    const sanitizedArgs = this.sanitizeInputs(args, tool);
+
+    // Execute tool with sanitized arguments
+    return tool.execute(sanitizedArgs);
+  }
+
+  private validateInput(schema: JSONSchema, input: any): ValidationResult {
+    // Implement JSON Schema validation
+    // This prevents injection attacks and ensures correct input types
+    try {
+      const ajv = new AJV();
+      const validate = ajv.compile(schema);
+      const valid = validate(input);
+
+      if (!valid) {
+        return {
+          valid: false,
+          error: validate.errors.map(err => err.message).join(", ")
+        };
+      }
+
+      return { valid: true };
+    } catch (error) {
+      return {
+        valid: false,
+        error: `Schema validation error: ${error.message}`
+      };
+    }
+  }
+
+  private sanitizeInputs(args: any, tool: Tool): any {
+    // Sanitize inputs based on tool type
+    // Remove potentially dangerous properties, escape strings, etc.
+    const sanitized = { ...args };
+
+    // Example: Remove null prototype objects
+    if (args && args.__proto__ === null) {
+      sanitized.__proto__ = Object.prototype;
+    }
+
+    // Example: Escape HTML in string inputs
+    Object.keys(sanitized).forEach(key => {
+      if (typeof sanitized[key] === 'string') {
+        sanitized[key] = this.escapeHtml(sanitized[key]);
+      }
+    });
+
+    return sanitized;
+  }
+}
+```
+
+### Rate Limiting
+
+```typescript
+import { RateLimiter } from 'limiter';
+
+class RateLimitedToolServer extends MCPServer {
+  private limiter = new RateLimiter(10, 60000); // 10 requests per minute
+  private toolLimits = new Map<string, RateLimiter>();
+
+  constructor() {
+    super({ name: "rate-limited-tools", version: "1.0.0" });
+    this.setupToolLimits();
+  }
+
+  private setupToolLimits() {
+    // Different limits for different tools
+    this.toolLimits.set("heavy-operation", new RateLimiter(1, 30000)); // 1 per 30 seconds
+    this.toolLimits.set("api-call", new RateLimiter(5, 60000));     // 5 per minute
+    this.toolLimits.set("file-read", new RateLimiter(20, 60000));    // 20 per minute
+  }
+
+  async executeTool(toolName: string, args: any): Promise<ToolResult> {
+    // Check global rate limit
+    try {
+      await this.limiter.removeTokens(1);
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: "Rate limit exceeded. Please try again later."
+        }],
+        isError: true
+      };
+    }
+
+    // Check tool-specific rate limit
+    const toolLimiter = this.toolLimits.get(toolName);
+    if (toolLimiter) {
+      try {
+        await toolLimiter.removeTokens(1);
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `Rate limit exceeded for ${toolName}. Please try again later.`
+          }],
+          isError: true
+        };
+      }
+    }
+
+    return super.executeTool(toolName, args);
+  }
+}
+```
+
+## Tool Composition and Chaining
+
+### Sequential Execution
+
+```typescript
+class ChainedToolServer extends MCPServer {
+  async executeWorkflow(workflow: WorkflowStep[]): Promise<ToolResult> {
+    const results = [];
+    let lastResult = null;
+
+    for (const step of workflow) {
+      // Pass previous result to next step if needed
+      const args = step.input ?
+        this.parseInputTemplate(step.input, lastResult) :
+        {};
+
+      const result = await this.executeTool(step.tool, args);
+      results.push(result);
+      lastResult = result;
+    }
+
+    return {
+      content: [{
+        type: "json",
+        json: {
+          workflow: workflow.map((step, i) => ({
+            step: i + 1,
+            tool: step.tool,
+            result: results[i]
+          }))
+        }
+      }]
+    };
+  }
+
+  private parseInputTemplate(template: string, context: any): any {
+    // Parse template strings like "Use this data: {{result.data}}"
+    return JSON.parse(template.replace(/\{\{(.+?)\}\}/g, (match, path) => {
+      return this.getNestedValue(context, path);
+    }));
+  }
+
+  private getNestedValue(obj: any, path: string): any {
+    return path.split('.').reduce((current, key) => current?.[key], obj);
+  }
+}
+```
+
+### Parallel Execution
+
+```typescript
+class ParallelToolServer extends MCPServer {
+  async executeParallel(tools: Array<{ name: string; args: any }>): Promise<ToolResult> {
+    const promises = tools.map(tool =>
+      this.executeTool(tool.name, tool.args)
+        .catch(error => ({
+          content: [{
+            type: "text",
+            text: `Error executing ${tool.name}: ${error.message}`
+          }],
+          isError: true,
+          isErrorDetailed: error.message
+        }))
+    );
+
+    const results = await Promise.all(promises);
+
+    return {
+      content: [{
+        type: "json",
+        json: {
+          executed: tools.length,
+          results: results.map((result, i) => ({
+            tool: tools[i].name,
+            success: !result.isError,
+            data: result.content[0]
+          }))
+        }
+      }]
+    };
+  }
+}
+```
+
+## Real-World Tool Examples
+
+### 1. Content Management Tools
+
+```typescript
+class CMSPluginServer extends MCPServer {
+  constructor(private cmsClient: CMSClient) {
+    super({
+      name: "cms-plugin",
+      version: "1.0.0"
+    });
+
+    this.registerTool({
+      name: "create-post",
+      description: "Create a new blog post",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "Post title"
+          },
+          content: {
+            type: "string",
+            description: "Post content in markdown"
+          },
+          author: {
+            type: "string",
+            description: "Post author name"
+          },
+          tags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Post tags"
+          }
+        },
+        required: ["title", "content"]
+      },
+      async execute({ title, content, author = "AI Assistant", tags = [] }) {
+        try {
+          const post = await this.cmsClient.createPost({
+            title,
+            content,
+            author,
+            tags,
+            status: "draft"
+          });
+
+          return {
+            content: [{
+              type: "json",
+              json: {
+                success: true,
+                postId: post.id,
+                title: post.title,
+                url: post.url
+              }
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text",
+              text: `Failed to create post: ${error.message}`
+            }],
+            isError: true,
+            isErrorDetailed: error.message
+          };
+        }
+      }
+    });
+  }
+}
+```
+
+### 2. DevOps Tools
+
+```typescript
+class DevOpsToolServer extends MCPServer {
+  constructor(private devOpsClient: DevOpsClient) {
+    super({
+      name: "devops-tools",
+      version: "1.0.0"
+    });
+
+    this.registerTool({
+      name: "deploy-service",
+      description: "Deploy a service to production",
+      inputSchema: {
+        type: "object",
+        properties: {
+          serviceName: {
+            type: "string",
+            description: "Name of the service to deploy"
+          },
+          version: {
+            type: "string",
+            description: "Version to deploy"
+          },
+          environment: {
+            type: "string",
+            enum: ["staging", "production"],
+            default: "production"
+          },
+          rollbackOnFailure: {
+            type: "boolean",
+            default: true,
+            description: "Automatically rollback if deployment fails"
+          }
+        },
+        required: ["serviceName", "version"]
+      },
+      async execute({ serviceName, version, environment = "production", rollbackOnFailure }) {
+        try {
+          const deployment = await this.devOpsClient.deploy({
+            service: serviceName,
+            version,
+            environment,
+            rollbackOnFailure
+          });
+
+          return {
+            content: [{
+              type: "json",
+              json: {
+                success: true,
+                deploymentId: deployment.id,
+                status: deployment.status,
+                url: deployment.monitoringUrl
+              }
+            }]
+          };
+        } catch (error) {
+          return {
+            content: [{
+              type: "text",
+              text: `Deployment failed: ${error.message}`
+            }],
+            isError: true,
+            isErrorDetailed: error.message
+          };
+        }
+      }
+    });
+  }
+}
+```
+
+
+

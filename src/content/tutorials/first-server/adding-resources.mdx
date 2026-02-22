@@ -1,0 +1,202 @@
+# Adding Resources
+
+Resources are how your MCP server exposes data to clients. They're read-only data sources that clients can retrieve on demand.
+
+## What are Resources?
+
+Resources represent data that your server can provide:
+- File contents
+- Database records
+- API responses
+- Computed data
+- System information
+
+Each resource has:
+- A **URI** (unique identifier)
+- A **name** (human-readable)
+- A **description** (what it contains)
+- **MIME type** (content type)
+
+## Implementing Resources
+
+Let's add a simple resource to your server that returns the current time:
+
+```typescript
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
+  CallToolRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+
+// Create server instance
+const server = new Server(
+  {
+    name: 'time-server',
+    version: '1.0.0',
+  },
+  {
+    capabilities: {
+      resources: {},
+    },
+  }
+);
+
+// List available resources
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  return {
+    resources: [
+      {
+        uri: 'time://current',
+        name: 'Current Time',
+        description: 'The current date and time',
+        mimeType: 'text/plain',
+      },
+    ],
+  };
+});
+
+// Read a resource's content
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+
+  if (uri === 'time://current') {
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'text/plain',
+          text: new Date().toString(),
+        },
+      ],
+    };
+  }
+
+  throw new Error(`Resource not found: ${uri}`);
+});
+```
+
+## Dynamic Resources
+
+Resources can be dynamic—generating different content each time they're read:
+
+```typescript
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+
+  if (uri === 'time://current') {
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'text/plain',
+          text: new Date().toISOString(), // Different each time!
+        },
+      ],
+    };
+  }
+});
+```
+
+<Callout type="warning">
+**Resource Limitations**: Resources are read-only. If you need to allow clients to modify data, use tools instead (covered next).
+</Callout>
+
+## Multiple Resources
+
+You can expose multiple resources from a single server:
+
+```typescript
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  return {
+    resources: [
+      {
+        uri: 'time://current',
+        name: 'Current Time',
+        description: 'Current date and time',
+        mimeType: 'text/plain',
+      },
+      {
+        uri: 'system://info',
+        name: 'System Info',
+        description: 'Basic system information',
+        mimeType: 'application/json',
+      },
+      {
+        uri: 'config://app',
+        name: 'App Config',
+        description: 'Application configuration',
+        mimeType: 'application/json',
+      },
+    ],
+  };
+});
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+
+  switch (uri) {
+    case 'time://current':
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'text/plain',
+            text: new Date().toString(),
+          },
+        ],
+      };
+
+    case 'system://info':
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              platform: process.platform,
+              arch: process.arch,
+              nodeVersion: process.version,
+            }, null, 2),
+          },
+        ],
+      };
+
+    case 'config://app':
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              name: 'time-server',
+              version: '1.0.0',
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            }, null, 2),
+          },
+        ],
+      };
+
+    default:
+      throw new Error(`Resource not found: ${uri}`);
+  }
+});
+```
+
+## Testing Your Resources
+
+You can test resources using the MCP Inspector:
+
+```bash
+npx @modelcontextprotocol/inspector node dist/index.js
+```
+
+In the inspector:
+1. Click on "Resources" in the sidebar
+2. Select a resource to read
+3. View its contents
+
+## Next Steps
+
+Now that you have resources working, let's add tools—which allow clients to perform actions.

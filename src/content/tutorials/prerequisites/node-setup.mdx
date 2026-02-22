@@ -1,0 +1,131 @@
+# Node.js & TypeScript Setup
+
+Before diving into MCP development, you need a properly configured development environment. This section will guide you through installing Node.js, TypeScript, and setting up your development tools.
+
+## Installing Node.js
+
+MCP servers are built on Node.js, so you'll need to install it first.
+
+### Check Your Current Version
+
+Open your terminal and run:
+
+```bash
+node --version
+npm --version
+```
+
+If you see version numbers, you already have Node.js installed. Make sure you have Node.js 18 or higher.
+
+### Install Node.js
+
+If you don't have Node.js installed, download it from [nodejs.org](https://nodejs.org/):
+
+1. Visit [nodejs.org](https://nodejs.org)
+2. Download the LTS (Long Term Support) version
+3. Run the installer and follow the prompts
+
+Or use a version manager like [nvm](https://github.com/nvm-sh/nvm) (recommended for developers):
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+nvm install --lts
+nvm use --lts
+```
+
+## Installing TypeScript
+
+TypeScript provides type safety and better developer experience. Install it globally:
+
+```bash
+npm install -g typescript
+npm install -g ts-node
+```
+
+Verify the installation:
+
+```bash
+tsc --version
+```
+
+## Setting Up a TypeScript Project
+
+Let's create a new TypeScript project:
+
+```bash
+# Create a new directory
+mkdir mcp-server-tutorial
+cd mcp-server-tutorial
+
+# Initialize a new npm project
+npm init -y
+
+# Install TypeScript and type definitions
+npm install --save-dev typescript @types/node
+
+# Create a tsconfig.json
+npx tsc --init
+```
+
+## Recommended tsconfig.json Settings
+
+For MCP development, use these TypeScript configurations:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+## Installing MCP SDK
+
+Once your TypeScript environment is ready, you can install the official MCP SDK:
+
+```bash
+npm install @modelcontextprotocol/sdk
+```
+
+<Callout type="info">
+**Tip**: Throughout this tutorial, we'll use the official `@modelcontextprotocol/sdk` package, which provides TypeScript types and utilities for building MCP servers.
+</Callout>
+
+## Verifying Your Setup
+
+Create a simple test file to verify everything works:
+
+**src/test.ts**:
+```typescript
+const message: string = "Hello, MCP!";
+console.log(message);
+```
+
+Compile and run it:
+
+```bash
+npx tsc
+node dist/test.js
+```
+
+If you see "Hello, MCP!" in your terminal, your environment is ready!
+
+## Next Steps
+
+With your development environment set up, you're ready to learn about MCP fundamentals in the next section.
+

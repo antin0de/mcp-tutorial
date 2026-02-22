@@ -1,0 +1,651 @@
+---
+title: "Prompt Strategies"
+description: "Apply engineering best practices to create effective, maintainable prompts"
+---
+
+# Prompt Strategies
+
+Great prompts are crafted, not written. In this final section, we'll explore proven strategies for prompt engineering that will help you create effective, maintainable, and scalable prompt systems. These strategies combine technical excellence with psychological understanding of AI behavior.
+
+## The Science of Effective Prompts
+
+Effective prompts balance technical precision with psychological framing. The best prompts not only tell the AI what to do, but how to think about the task.
+
+### Core Principles of Prompt Engineering
+
+1. **Clarity**: Be specific about what you want
+2. **Context**: Provide necessary background information
+3. **Structure**: Use formatting to guide the AI's response
+4. **Examples**: Show what good output looks like
+5. **Constraints**: Set boundaries on the response
+
+### Prompt Design Framework
+
+```typescript
+class PromptStrategy {
+  createEffectivePrompt(config: PromptConfig): Prompt {
+    return {
+      name: config.name,
+      description: config.description,
+      template: this.buildTemplate(config),
+      variables: config.variables,
+      context: this.enrichContext(config),
+      constraints: this.applyConstraints(config),
+      examples: this.provideExamples(config),
+      metadata: this.generateMetadata(config)
+    };
+  }
+
+  private buildTemplate(config: PromptConfig): string {
+    let template = this.getSystemPrompt(config);
+
+    if (config.steps) {
+      template += this.formatSteps(config.steps);
+    }
+
+    if (config.format) {
+      template += this.getFormatInstructions(config.format);
+    }
+
+    if (config.outputRequirements) {
+      template += this.getOutputRequirements(config.outputRequirements);
+    }
+
+    return template;
+  }
+
+  private getSystemPrompt(config: PromptConfig): string {
+    return `You are an expert ${config.role} with ${config.experience} experience.
+
+${config.objective}
+
+Your expertise includes:
+${config.expertise.join('\n- ')}
+
+Core principles:
+${config.principles.join('\n- ')}
+
+`;
+  }
+
+  private formatSteps(steps: string[]): string {
+    return `Follow these steps in order:
+${steps.map((step, index) => `${index + 1}. ${step}`).join('\n')}
+
+`;
+  }
+
+  private getFormatInstructions(format: OutputFormat): string {
+    return `Format your response as ${format.type}:
+
+${this.getFormatTemplate(format)}
+
+`;
+  }
+
+  private getFormatTemplate(format: OutputFormat): string {
+    switch (format.type) {
+      case 'markdown':
+        return this.getMarkdownTemplate(format);
+      case 'json':
+        return this.getJsonTemplate(format);
+      case 'html':
+        return this.getHtmlTemplate(format);
+      default:
+        return '';
+    }
+  }
+}
+```
+
+## Advanced Prompt Patterns
+
+### 1. Chain-of-Thought Prompting
+
+Guide the AI through a logical thinking process:
+
+```typescript
+const chainOfThoughtPrompt = {
+  name: "problem-solving",
+  description: "Solve complex problems with step-by-step reasoning",
+  template: `You are a problem-solving expert. Analyze this problem using the following framework:
+
+**Problem Statement:**
+{{problem}}
+
+**Step 1: Understanding**
+- What exactly is being asked?
+- What are the key constraints?
+- What information is missing?
+
+**Step 2: Analysis**
+- Break down the problem into subproblems
+- Identify patterns and relationships
+- Consider edge cases
+
+**Step 3: Strategy Selection**
+- Choose appropriate approach(es)
+- Justify your selection
+- Outline the solution plan
+
+**Step 4: Implementation**
+- Execute the solution
+- Show your work clearly
+- Document decisions made
+
+**Step 5: Verification**
+- Check the solution
+- Verify against requirements
+- Consider alternative approaches
+
+**Final Answer:**
+[Provide the complete solution with explanations]
+
+Remember: Show your thinking process clearly. The journey matters as much as the destination.`,
+  variables: ["problem"],
+  constraints: {
+    format: "markdown",
+    maxLength: 2000,
+    requiredSections: ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5", "Final Answer"]
+  }
+};
+```
+
+### 2. Few-Shot Learning with Examples
+
+Provide examples to guide the AI's response style:
+
+```typescript
+const fewShotPrompt = {
+  name: "style-consistent-response",
+  description: "Generate responses consistent with provided examples",
+  template: `You are a communication expert. Maintain consistent style and tone in your responses.
+
+**Examples:**
+
+{{#each examples}}
+Example {{@index}}:
+{{this}}
+{{/each}}
+
+**Current Task:**
+{{currentTask}}
+
+Maintain the style, tone, and structure from the examples above.
+Include the same level of detail and use similar language patterns.
+{{#if specificRequirements}}
+Additional requirements: {{specificRequirements}}
+{{/if}}
+
+Your response:`,
+  variables: ["examples", "currentTask", "specificRequirements"],
+  context: {
+    exampleCount: 3,
+    minSimilarity: 0.8
+  }
+};
+```
+
+### 3. Role-Based Prompting
+
+Assign specific roles to get specialized responses:
+
+```typescript
+const roleBasedPrompt = {
+  name: "role-expert",
+  description: "Get responses from AI with specific expertise",
+  template: `You are {{role}} with {{experienceLevel}} experience in {{specialty}}.
+
+**Background:**
+{{background}}
+
+**Current Challenge:**
+{{challenge}}
+
+**Context:**
+{{context}}
+
+**Your Expert Response:**
+- Address the challenge using your expertise
+- Provide actionable insights
+- Explain your reasoning clearly
+- Suggest next steps
+
+{{#if audience}}
+**Audience:** {{audience}} - Tailor your response accordingly.
+{{/if}}`,
+  variables: ["role", "experienceLevel", "specialty", "background", "challenge", "context", "audience"],
+  constraints: {
+    format: "markdown",
+    maxLength: 2500,
+    tone: "expert"
+  }
+};
+```
+
+## Prompt Optimization Strategies
+
+### A/B Testing Framework
+
+```typescript
+class PromptOptimizer {
+  private testResults = new Map<string, TestResult[]>();
+
+  async testPromptVariants(
+    basePrompt: PromptTemplate,
+    variants: PromptVariant[],
+    testCases: TestCase[]
+  ): Promise<VariantPerformance> {
+    const results: VariantPerformance = {};
+
+    for (const variant of variants) {
+      const variantResults: TestResult[] = [];
+
+      for (const testCase of testCases) {
+        const testResult = await this.runPromptTest(variant, testCase);
+        variantResults.push(testResult);
+      }
+
+      this.testResults.set(variant.name, variantResults);
+      results[variant.name] = this.analyzeResults(variantResults);
+    }
+
+    return this.findBestVariant(results);
+  }
+
+  private async runPromptTest(
+    variant: PromptVariant,
+    testCase: TestCase
+  ): Promise<TestResult> {
+    const processedArgs = await this.processArguments(variant.template, testCase.input);
+    const output = await this.renderPrompt(variant.template, processedArgs);
+
+    return {
+      variant: variant.name,
+      input: testCase.input,
+      output,
+      metrics: this.calculateMetrics(output, testCase.expected)
+    };
+  }
+
+  private calculateMetrics(actual: string, expected: ExpectedOutput): MetricResult {
+    return {
+      relevance: this.calculateRelevance(actual, expected),
+      completeness: this.calculateCompleteness(actual, expected),
+      clarity: this.calculateClarity(actual),
+      conciseness: this.calculateConciseness(actual),
+      adherence: this.calculateAdherence(actual, expected)
+    };
+  }
+
+  private calculateRelevance(actual: string, expected: ExpectedOutput): number {
+    // Calculate how well the output addresses the expected content
+    if (typeof expected === 'string') {
+      const keywords = expected.split(' ').filter(word => word.length > 3);
+      const matches = keywords.filter(keyword => actual.toLowerCase().includes(keyword.toLowerCase()));
+      return matches.length / keywords.length;
+    }
+    return 0.5; // Default relevance for complex expectations
+  }
+
+  private calculateCompleteness(actual: string, expected: ExpectedOutput): number {
+    // Check if all required elements are present
+    if (expected.requiredElements) {
+      const elementsPresent = expected.requiredElements.filter(element =>
+        actual.toLowerCase().includes(element.toLowerCase())
+      ).length;
+      return elementsPresent / expected.requiredElements.length;
+    }
+    return 1.0; // Assume complete if no requirements specified
+  }
+}
+```
+
+### Performance Metrics
+
+```typescript
+class PromptMetrics {
+  calculatePromptPerformance(results: TestResult[]): PerformanceSummary {
+    return {
+      averageRelevance: this.average(results.map(r => r.metrics.relevance)),
+      averageCompleteness: this.average(results.map(r => r.metrics.completeness)),
+      averageClarity: this.average(results.map(r => r.metrics.clarity)),
+      averageConciseness: this.average(results.map(r => r.metrics.conciseness)),
+      successRate: this.calculateSuccessRate(results),
+      consistency: this.calculateConsistency(results),
+      processingTime: this.calculateAverageProcessingTime(results)
+    };
+  }
+
+  private calculateSuccessRate(results: TestResult[]): number {
+    return results.filter(r =>
+      r.metrics.relevance >= 0.8 &&
+      r.metrics.completeness >= 0.8
+    ).length / results.length;
+  }
+
+  private calculateConsistency(results: TestResult[]): number {
+    // Calculate how consistent the prompt is across different inputs
+    const relevanceValues = results.map(r => r.metrics.relevance);
+    const standardDeviation = this.standardDeviation(relevanceValues);
+    return 1 - (standardDeviation / this.average(relevanceValues));
+  }
+
+  private standardDeviation(values: number[]): number {
+    const mean = this.average(values);
+    const squaredDiffs = values.map(value => Math.pow(value - mean, 2));
+    const avgSquaredDiff = this.average(squaredDiffs);
+    return Math.sqrt(avgSquaredDiff);
+  }
+}
+```
+
+## Scalable Prompt Architecture
+
+### Prompt Versioning
+
+```typescript
+class PromptVersionManager {
+  private versions = new Map<string, PromptVersion[]>();
+  private currentVersions = new Map<string, string>();
+
+  addVersion(promptName: string, version: PromptVersion): void {
+    if (!this.versions.has(promptName)) {
+      this.versions.set(promptName, []);
+    }
+
+    const versions = this.versions.get(promptName)!;
+    versions.push(version);
+
+    // Sort versions by timestamp
+    versions.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Update current version
+    this.currentVersions.set(promptName, version.version);
+  }
+
+  getVersion(promptName: string, version?: string): PromptVersion | null {
+    const versions = this.versions.get(promptName);
+    if (!versions) return null;
+
+    if (version) {
+      return versions.find(v => v.version === version) || null;
+    }
+
+    return versions[0]; // Return latest version
+  }
+
+  createSnapshot(promptName: string): PromptSnapshot {
+    const currentVersion = this.getVersion(promptName);
+    if (!currentVersion) {
+      throw new Error(`Prompt ${promptName} not found`);
+    }
+
+    return {
+      promptName,
+      version: currentVersion.version,
+      timestamp: new Date(),
+      template: currentVersion.template,
+      hash: this.calculateHash(currentVersion.template),
+      changelog: this.getChangelog(promptName)
+    };
+  }
+
+  private calculateHash(template: string): string {
+    // Simple hash implementation
+    let hash = 0;
+    for (let i = 0; i < template.length; i++) {
+      const char = template.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash.toString(16);
+  }
+}
+```
+
+### Prompt Composition
+
+```typescript
+class PromptComposer {
+  private promptModules = new Map<string, PromptModule>();
+
+  registerModule(name: string, module: PromptModule): void {
+    this.promptModules.set(name, module);
+  }
+
+  composePrompt(templateName: string, moduleNames: string[]): ComposedPrompt {
+    const modules = moduleNames.map(name => {
+      const module = this.promptModules.get(name);
+      if (!module) {
+        throw new Error(`Module ${name} not found`);
+      }
+      return module;
+    });
+
+    // Combine modules
+    const combinedTemplate = this.combineModules(modules);
+    const combinedVariables = this.combineVariables(modules);
+    const combinedConstraints = this.combineConstraints(modules);
+
+    return {
+      name: templateName,
+      template: combinedTemplate,
+      variables: combinedVariables,
+      constraints: combinedConstraints,
+      dependencies: moduleNames
+    };
+  }
+
+  private combineModules(modules: PromptModule[]): string {
+    return modules.map(module => module.template).join('\n\n');
+  }
+
+  private combineVariables(modules: PromptModule[]): string[] {
+    const allVariables = new Set<string>();
+    modules.forEach(module => {
+      module.variables.forEach(variable => allVariables.add(variable));
+    });
+    return Array.from(allVariables);
+  }
+
+  private combineConstraints(modules: PromptModule[]): PromptConstraints {
+    const combined: PromptConstraints = {};
+
+    modules.forEach(module => {
+      if (module.constraints) {
+        Object.assign(combined, module.constraints);
+      }
+    });
+
+    return combined;
+  }
+}
+```
+
+## Monitoring and Maintenance
+
+### Prompt Performance Monitoring
+
+```typescript
+class PromptMonitor {
+  private metricsHistory = new Map<string, MetricRecord[]>();
+
+  recordUsage(promptName: string, usage: PromptUsage): void {
+    const now = new Date();
+    const record: MetricRecord = {
+      timestamp: now,
+      usage,
+      performance: this.calculatePerformanceMetrics(usage)
+    };
+
+    if (!this.metricsHistory.has(promptName)) {
+      this.metricsHistory.set(promptName, []);
+    }
+
+    const history = this.metricsHistory.get(promptName)!;
+    history.push(record);
+
+    // Keep only last 1000 records
+    if (history.length > 1000) {
+      history.splice(0, history.length - 1000);
+    }
+  }
+
+  getPerformanceTrends(promptName: string, days: number = 7): PerformanceTrend {
+    const history = this.metricsHistory.get(promptName) || [];
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+
+    const recentHistory = history.filter(record => record.timestamp > cutoff);
+
+    return {
+      averageLatency: this.average(recentHistory.map(r => r.performance.latency)),
+      errorRate: this.calculateErrorRate(recentHistory),
+      satisfactionScore: this.average(recentHistory.map(r => r.performance.satisfaction)),
+      usageCount: recentHistory.length,
+      trend: this.calculateTrend(recentHistory)
+    };
+  }
+
+  private calculateErrorRate(records: MetricRecord[]): number {
+    const errors = records.filter(r => r.performance.error).length;
+    return records.length > 0 ? errors / records.length : 0;
+  }
+
+  private calculateTrend(records: MetricRecord[]): 'improving' | 'declining' | 'stable' {
+    if (records.length < 2) return 'stable';
+
+    const recentHalf = records.slice(-Math.floor(records.length / 2));
+    const earlierHalf = records.slice(0, Math.floor(records.length / 2));
+
+    const recentAverage = this.average(recentHalf.map(r => r.performance.satisfaction));
+    const earlierAverage = this.average(earlierHalf.map(r => r.performance.satisfaction));
+
+    if (recentAverage > earlierAverage + 0.1) return 'improving';
+    if (recentAverage < earlierAverage - 0.1) return 'declining';
+    return 'stable';
+  }
+}
+```
+
+### Automated Prompt Improvement
+
+```typescript
+class PromptImprover {
+  private threshold = {
+    relevance: 0.7,
+    completeness: 0.7,
+    clarity: 0.7,
+    satisfaction: 0.7
+  };
+
+  async suggestImprovements(promptName: string): Promise<ImprovementSuggestion[]> {
+    const performance = this.monitor.getPerformanceTrends(promptName);
+    const suggestions: ImprovementSuggestion[] = [];
+
+    if (performance.errorRate > 0.1) {
+      suggestions.push({
+        type: 'error_handling',
+        priority: 'high',
+        description: 'High error rate detected. Consider adding better error handling and fallback responses.',
+        suggestedActions: [
+          'Add try-catch blocks in template logic',
+          'Provide default values for missing variables',
+          'Add validation step before template rendering'
+        ]
+      });
+    }
+
+    if (performance.averageLatency > 2000) {
+      suggestions.push({
+        type: 'performance',
+        priority: 'medium',
+        description: 'High latency detected. Optimize template processing.',
+        suggestedActions: [
+          'Cache frequently used templates',
+          'Optimize variable substitution logic',
+          'Pre-compile regex patterns'
+        ]
+      });
+    }
+
+    // Analyze content quality
+    const contentAnalysis = await this.analyzeContentQuality(promptName);
+    if (contentAnalysis.relevance < this.threshold.relevance) {
+      suggestions.push({
+        type: 'content',
+        priority: 'high',
+        description: 'Low relevance score. Improve prompt clarity and specificity.',
+        suggestedActions: [
+          'Add more specific instructions',
+          'Include examples of expected output',
+          'Clarify the desired format and structure'
+        ]
+      });
+    }
+
+    return suggestions.sort((a, b) => {
+      const priorityOrder = { 'high': 3, 'medium': 2, 'low': 1 };
+      return priorityOrder[b.priority] - priorityOrder[a.priority];
+    });
+  }
+
+  private async analyzeContentQuality(promptName: string): Promise<ContentQuality> {
+    // Implementation for content analysis
+    // This could include NLP analysis, user feedback analysis, etc.
+    return {
+      relevance: 0.8,
+      completeness: 0.9,
+      clarity: 0.7,
+      satisfaction: 0.75
+    };
+  }
+}
+```
+
+## Best Practices Summary
+
+### 1. The 5 C's of Effective Prompts
+
+1. **Clear**: Unambiguous instructions
+2. **Concise**: No unnecessary words
+3. **Complete**: All necessary information
+4. **Consistent**: Same style and structure
+5. **Contextual**: Relevant background and context
+
+### 2. Prompt Testing Checklist
+
+- [ ] Test with edge cases
+- [ ] Validate variable substitution
+- [ ] Check output format compliance
+- [ ] Verify error handling
+- [ ] Measure response quality
+- [ ] Test performance under load
+- [ ] Validate security constraints
+
+### 3. Maintenance Guidelines
+
+- Version all prompts
+- Monitor performance metrics
+- Collect user feedback
+- Regularly review and update
+- Document changes and rationale
+- Test backward compatibility
+
+## Final Section Quiz
+
+## Module Summary
+
+Congratulations! You've completed the Prompts module. Let's review what we've learned:
+
+### Key Concepts Covered
+
+1. **Templates**: Creating reusable prompt templates with variable substitution for consistent AI interactions
+2. **Arguments**: Implementing robust argument validation, type checking, and parameter management
+3. **Strategies**: Applying engineering best practices to create effective, maintainable prompts
+
+### Next Steps
+
+Now that you understand prompt engineering fundamentals, you're ready to start building sophisticated MCP servers with dynamic, effective prompts. Practice these concepts by creating your own templates and testing them with different scenarios!
+

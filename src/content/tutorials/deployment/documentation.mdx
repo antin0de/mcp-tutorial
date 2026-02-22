@@ -1,0 +1,902 @@
+---
+title: "VPS Deployment"
+description: "Deploy MCP servers on a VPS with systemd, nginx, and security hardening"
+---
+
+# VPS Deployment
+
+Virtual Private Servers (VPS) provide a cost-effective way to host MCP servers with full control over the environment. This guide covers setting up an MCP server on a VPS with proper security, monitoring, and maintenance.
+
+## VPS Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         VPS Deployment                             │
+│                                                                     │
+│   Internet                                                          │
+│       │                                                             │
+│       ▼                                                             │
+│   ┌─────────────────────────────────────────────────────────────────┐ │
+│   │   nginx (Load Balancer/Reverse Proxy)                         │ │
+│   │                                                                   │ │
+│   │   ┌─────────────────────────────────────────────────────────────┐│ │
+│   │   │   Firewall (ufw)                                          ││ │
+│   │   │                                                                   ││ │
+│   │   │   ┌───────────────────────────────────────────────────────┐│ │
+│   │   │   │   Systemd Service (mcp-server)                       ││ │
+│   │   │   │                                                                   ││ │
+│   │   │   │   ┌───────────────────────────────────────────────────┐│ │
+│   │   │   │   │   Node.js Process                               ││ │
+│   │   │   │   │                                                                   ││ │
+│   │   │   │   │   ┌─────────────────────────────────────────────┐│ │
+│   │   │   │   │   │   MCP Server Application                    ││ │
+│   │   │   │   │   │   Tools & Resources                       ││ │
+│   │   │   │   │   └─────────────────────────────────────────────┘│ │
+│   │   │   │   └───────────────────────────────────────────────────┘│ │
+│   │   │   └───────────────────────────────────────────────────────┘│ │
+│   │   │                                                           │ │
+│   │   │   Monitoring & Logging                                   │ │
+│   │   │   ┌───────────────────────────────────────────────────────┐│ │
+│   │   │   │   PM2 (Process Manager)                              ││ │
+│   │   │   │   Systemd Logs                                       ││ │
+│   │   │   │   Logrotate                                          ││ │
+│   │   │   └───────────────────────────────────────────────────────┘│ │
+│   │   └─────────────────────────────────────────────────────────────┘│ │
+│   │                                                                 │ │
+│   └─────────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│   SSH Access                                                       │
+│   ┌─────────────────────────────────────────────────────────────────┐ │
+│   │   Key-based Authentication                                     │ │
+│   │   Fail2Ban (Brute-force Protection)                            │ │
+│   │   Port 22 Forwarding                                           │ │
+│   └─────────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## Prerequisites
+
+1. **VPS Provider**: DigitalOcean, Linode, Vultr, AWS EC2, or similar
+2. **Domain Name**: For production access
+3. **SSH Key**: For secure access
+4. **Basic Linux Knowledge**: Command line navigation
+
+### Recommended VPS Specifications
+
+- **CPU**: 2 cores minimum
+- **Memory**: 4GB minimum
+- **Storage**: 50GB SSD minimum
+- **OS**: Ubuntu 22.04 LTS
+
+## Step 1: Server Setup
+
+### Initial Server Configuration
+
+```bash
+# Connect to your VPS via SSH
+ssh root@your-vps-ip
+
+# Update system
+apt update && apt upgrade -y
+
+# Set hostname
+hostnamectl set-hostname mcp-server
+
+# Create user
+adduser mcpuser
+
+# Add to sudo group
+usermod -aG sudo mcpuser
+
+# Switch to new user
+su - mcpuser
+```
+
+### Security Hardening
+
+```bash
+# Install fail2ban
+sudo apt install fail2ban -y
+
+# Configure UFW firewall
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+sudo ufw allow http
+sudo ufw allow https
+sudo ufw enable
+
+# Configure fail2ban
+sudo nano /etc/fail2ban/jail.local
+```
+
+Create `/etc/fail2ban/jail.local`:
+
+```ini
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+banaction = ufw
+
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 1d
+```
+
+Restart fail2ban:
+
+```bash
+sudo systemctl restart fail2ban
+```
+
+### SSH Configuration
+
+Edit `/etc/ssh/sshd_config`:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+```
+# Security improvements
+Port 2222
+PermitRootLogin no
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM yes
+X11Forwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/openssh/sftp-server
+```
+
+Restart SSH:
+
+```bash
+sudo systemctl restart sshd
+```
+
+## Step 2: Install Dependencies
+
+### Install Node.js
+
+```bash
+# Install Node.js 18
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Verify installation
+node --version  # Should be v18.x
+npm --version   # Should be 9.x
+```
+
+### Install Docker (Optional)
+
+```bash
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Add user to docker group
+sudo usermod -aG docker mcpuser
+
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+```
+
+### Install Other Dependencies
+
+```bash
+# Install nginx
+sudo apt install nginx -y
+
+# Install PM2
+sudo npm install pm2 -g
+
+# Install monitoring tools
+sudo apt install htop -y
+```
+
+## Step 3: Deploy MCP Server
+
+### Project Structure
+
+Create the following structure on your VPS:
+
+```bash
+mkdir -p ~/mcp-server/{src,config,logs,scripts}
+cd ~/mcp-server
+```
+
+### Package.json
+
+```json
+{
+  "name": "mcp-vps-server",
+  "version": "1.0.0",
+  "description": "MCP server deployed on VPS",
+  "main": "dist/http-server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/http-server.js",
+    "dev": "nodemon --exec ts-node src/http-server.ts",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "body-parser": "^1.20.2",
+    "express": "^4.18.2",
+    "winston": "^3.10.0",
+    "pm2": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.5.0",
+    "@types/express": "^4.17.17",
+    "@types/jest": "^29.5.4",
+    "eslint": "^8.47.0",
+    "jest": "^29.6.2",
+    "nodemon": "^3.0.1",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.6"
+  }
+}
+```
+
+### TypeScript Configuration
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    "exactOptionalPropertyTypes": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}
+```
+
+### Server Implementation
+
+```typescript
+// src/http-server.ts
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { HTTPServerTransport } from "@modelcontextprotocol/sdk/server/http.js";
+import { Server as HTTPServer } from "http";
+import { json } from "body-parser";
+import { createLogger, format, transports } from 'winston';
+
+const logger = createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: format.combine(
+    format.timestamp(),
+    format.errors({ stack: true }),
+    format.json()
+  ),
+  transports: [
+    new transports.File({ filename: '../logs/error.log', level: 'error' }),
+    new transports.File({ filename: '../logs/combined.log' }),
+    new transports.Console({ format: format.simple() })
+  ]
+});
+
+const server = new Server(
+  {
+    name: "mcp-vps-server",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+      resources: {},
+    },
+  }
+);
+
+// Tool implementation
+server.setRequestHandler(require("@modelcontextprotocol/sdk/types.js").ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: "echo",
+        description: "Echo back the input text",
+        inputSchema: {
+          type: "object",
+          properties: {
+            text: { type: "string" },
+          },
+          required: ["text"],
+        },
+      },
+    ],
+  };
+});
+
+server.setRequestHandler(require("@modelcontextprotocol/sdk/types.js").CallToolRequestSchema, async (request) => {
+  logger.info('Tool called', { tool: request.params.name, arguments: request.params.arguments });
+
+  if (request.params.name === "echo") {
+    return {
+      content: [
+        {
+          type: "text",
+          text: request.params.arguments.text,
+        },
+      ],
+    };
+  }
+  throw new Error(`Unknown tool: ${request.params.name}`);
+});
+
+// Resource implementation
+server.setRequestHandler(require("@modelcontextprotocol/sdk/types.js").ListResourcesRequestSchema, async () => {
+  return {
+    resources: [
+      {
+        uri: "resource:///system-info",
+        name: "system-info",
+        description: "System information",
+        mimeType: "application/json",
+      },
+    ],
+  };
+});
+
+server.setRequestHandler(require("@modelcontextprotocol/sdk/types.js").ReadResourceRequestSchema, async (request) => {
+  if (request.params.uri === "resource:///system-info") {
+    return {
+      contents: [
+        {
+          uri: "resource:///system-info",
+          mimeType: "application/json",
+          text: JSON.stringify({
+            uptime: process.uptime(),
+            memory: process.memoryUsage(),
+            platform: process.platform,
+            nodeVersion: process.version,
+          }),
+        },
+      ],
+    };
+  }
+  throw new Error(`Unknown resource: ${request.params.uri}`);
+});
+
+// Create HTTP server
+const httpServer = new HTTPServer();
+
+// Add middleware
+httpServer.use(json());
+
+// Health check endpoint
+httpServer.on("request", (req, res) => {
+  if (req.url === "/health") {
+    res.writeHead(200);
+    res.json({ status: "healthy", timestamp: new Date().toISOString() });
+  } else if (req.url === "/mcp") {
+    logger.info('MCP request received', { method: req.method });
+    const transport = new HTTPServerTransport(req, res);
+    server.connect(transport);
+  } else {
+    res.writeHead(404);
+    res.end("Not found");
+  }
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+httpServer.listen(PORT, () => {
+  logger.info(`MCP server started on port ${PORT}`);
+});
+```
+
+### Build the Application
+
+```bash
+npm install
+npm run build
+```
+
+## Step 4: Create Systemd Service
+
+Create `/etc/systemd/system/mcp-server.service`:
+
+```ini
+[Unit]
+Description=MCP Server Service
+After=network.target
+
+[Service]
+User=mcpuser
+WorkingDirectory=/home/mcpuser/mcp-server
+Environment=NODE_ENV=production
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=PORT=3000
+
+ExecStart=/usr/bin/node dist/http-server.js
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/mcpuser/mcp-server/logs
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable mcp-server
+sudo systemctl start mcp-server
+
+# Check status
+sudo systemctl status mcp-server
+
+# View logs
+sudo journalctl -u mcp-server -f
+```
+
+## Step 5: Configure nginx
+
+Create `/etc/nginx/sites-available/mcp-server`:
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name your-domain.com www.your-domain.com;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+    add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+
+    # Rate limiting
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+    limit_req zone=api burst=20 nodelay;
+
+    # Logging
+    access_log /var/log/nginx/mcp-server.access.log;
+    error_log /var/log/nginx/mcp-server.error.log;
+
+    # Health check
+    location /health {
+        proxy_pass http://localhost:3000/health;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # MCP API endpoint
+    location /mcp {
+        limit_req zone=api burst=20 nodelay;
+
+        proxy_pass http://localhost:3000/mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeouts
+        proxy_connect_timeout 30s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+
+        # Buffer settings
+        proxy_buffering on;
+        proxy_buffer_size 4k;
+        proxy_buffers 8 4k;
+    }
+
+    # Static files
+    location / {
+        proxy_pass http://localhost:3000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# Redirect HTTP to HTTPS
+server {
+    listen 80;
+    server_name your-domain.com www.your-domain.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+Enable the site:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/mcp-server /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+## Step 6: SSL Certificate with Let's Encrypt
+
+```bash
+# Install Certbot
+sudo apt install certbot python3-certbot-nginx -y
+
+# Get SSL certificate
+sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+
+# Auto-renewal
+sudo systemctl status certbot.timer
+sudo certbot renew --dry-run
+```
+
+## Step 7: Monitoring and Maintenance
+
+### Create Monitoring Scripts
+
+```bash
+# scripts/monitor.sh
+#!/bin/bash
+
+# Monitor server resources
+echo "=== System Resources ==="
+free -h
+echo "---"
+df -h
+echo "---"
+uptime
+
+# Monitor MCP service
+echo -e "\n=== MCP Service Status ==="
+sudo systemctl is-active mcp-server
+sudo systemctl status mcp-server --no-pager -l
+
+# Monitor logs
+echo -e "\n=== Recent Errors ==="
+tail -n 50 ~/mcp-server/logs/error.log
+
+# Monitor nginx
+echo -e "\n=== Nginx Status ==="
+sudo systemctl status nginx --no-pager -l
+```
+
+```bash
+# scripts/backup.sh
+#!/bin/bash
+
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/home/mcpuser/backups"
+
+# Create backup directory
+mkdir -p $BACKUP_DIR
+
+# Backup application
+tar -czf $BACKUP_DIR/mcp-server_$DATE.tar.gz \
+  -C /home/mcpuser \
+  --exclude=node_modules \
+  --exclude=logs \
+  mcp-server/
+
+# Backup databases if any
+# mysqldump -u mcpuser -p mcp_db > $BACKUP_DIR/database_$DATE.sql
+
+# Keep only last 7 days
+find $BACKUP_DIR -name "mcp-server_*.tar.gz" -mtime +7 -delete
+
+echo "Backup completed: $BACKUP_DIR/mcp-server_$DATE.tar.gz"
+```
+
+### Set Up Automated Tasks
+
+```bash
+# Edit crontab
+crontab -e
+```
+
+Add these entries:
+
+```bash
+# Monitor server every hour
+0 * * * * /home/mcpuser/scripts/monitor.sh >> /home/mcpuser/monitor.log 2>&1
+
+# Backup daily at 2 AM
+0 2 * * * /home/mcpuser/scripts/backup.sh
+
+# Rotate logs weekly
+0 3 * * 0 /usr/sbin/logrotate -f /etc/logrotate.d/mcp-server
+```
+
+### Logrotate Configuration
+
+Create `/etc/logrotate.d/mcp-server`:
+
+```
+/home/mcpuser/mcp-server/logs/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    copytruncate
+    su mcpuser mcpuser
+}
+```
+
+## Step 8: Update and Maintenance
+
+### Automated Updates
+
+```bash
+# Create update script
+# scripts/update.sh
+#!/bin/bash
+
+# Pull latest code
+cd /home/mcpuser/mcp-server
+git pull origin main
+
+# Install dependencies
+npm ci
+
+# Build application
+npm run build
+
+# Restart service
+sudo systemctl restart mcp-server
+
+# Check status
+sudo systemctl status mcp-server
+```
+
+### Security Updates
+
+```bash
+# Create script for security updates
+# scripts/security-update.sh
+#!/bin/bash
+
+# Update system
+sudo apt update
+sudo apt upgrade -y
+
+# Update npm packages
+npm audit fix
+
+# Update nginx
+sudo apt install nginx -y
+
+# Restart services
+sudo systemctl restart nginx
+sudo systemctl restart fail2ban
+
+# Clean up
+sudo apt autoremove -y
+sudo apt autoclean -y
+```
+
+## Step 9: Backup Strategy
+
+### Backup Scripts
+
+```bash
+# Full backup script
+# scripts/backup-full.sh
+#!/bin/bash
+
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="/home/mcpuser/backups"
+BACKUP_FILE="$BACKUP_DIR/full_backup_$DATE.tar.gz"
+
+# Create full backup
+tar -czf $BACKUP_FILE \
+  --exclude=node_modules \
+  --exclude=logs \
+  --exclude=.git \
+  /home/mcpuser/mcp-server
+
+# System backup
+tar -czf $BACKUP_DIR/system_$DATE.tar.gz \
+  --exclude=/var/lib/docker \
+  --exclude=/tmp \
+  --exclude=/proc \
+  --exclude=/sys \
+  --exclude=/dev \
+  --exclude=/run \
+  --exclude=/mnt \
+  --exclude=/media \
+  --exclude=/lost+found \
+  --exclude=/home/mcpuser/backups \
+  /
+
+# Upload to cloud (optional)
+# aws s3 cp $BACKUP_FILE s3://your-backup-bucket/
+
+echo "Full backup completed: $BACKUP_FILE"
+```
+
+### Restore Procedure
+
+```bash
+# Restore script
+# scripts/restore.sh
+#!/bin/bash
+
+BACKUP_FILE=$1
+
+if [ -z "$BACKUP_FILE" ]; then
+    echo "Usage: $0 <backup-file>"
+    exit 1
+fi
+
+# Stop services
+sudo systemctl stop mcp-server
+
+# Extract backup
+tar -xzf $BACKUP_FILE -C /tmp
+cd /tmp/home/mcpuser/mcp-server
+
+# Restore files
+cp -r * /home/mcpuser/mcp-server/
+
+# Rebuild
+cd /home/mcpuser/mcp-server
+npm ci
+npm run build
+
+# Start services
+sudo systemctl start mcp-server
+
+# Verify
+sudo systemctl status mcp-server
+```
+
+
+
+## Complete Project Structure
+
+```
+/home/mcpuser/mcp-server/
+├── src/
+│   ├── http-server.ts    # HTTP server implementation
+│   ├── server.ts         # MCP server logic
+│   └── logging.ts       # Winston logging configuration
+├── config/
+│   └── nginx.conf        # Nginx configuration
+├── logs/                 # Log files
+├── scripts/
+│   ├── monitor.sh        # System monitoring script
+│   ├── backup.sh         # Backup script
+│   ├── update.sh        # Update script
+│   └── security-update.sh # Security updates
+├── package.json
+├── tsconfig.json
+├── Dockerfile            # Optional Docker support
+├── docker-compose.yml    # Optional Docker Compose
+└── .env                  # Environment variables
+
+/etc/systemd/system/mcp-server.service
+/etc/nginx/sites-available/mcp-server
+/etc/logrotate.d/mcp-server
+```
+
+## Common Issues and Solutions
+
+### Port Already in Use
+
+**Problem**: Port 3000 is already in use
+```bash
+# Find process using port
+sudo lsof -ti:3000 | xargs kill -9
+# Or change port in systemd and nginx configuration
+```
+
+### Memory Issues
+
+**Problem**: Server running out of memory
+```bash
+# Check memory usage
+free -h
+ps aux --sort=-%mem | head -10
+
+# Increase memory limit in systemd
+# Edit mcp-server.service and add:
+# MemoryMax=1G
+```
+
+### Nginx Configuration Issues
+
+**Problem**: Nginx won't start
+```bash
+# Test configuration
+sudo nginx -t
+
+# Check error logs
+sudo tail -f /var/log/nginx/error.log
+```
+
+### Certificate Renewal Issues
+
+**Problem**: SSL certificate renewal fails
+```bash
+# Manually renew
+sudo certbot renew --dry-run
+
+# Check certbot status
+sudo systemctl status certbot.timer
+```
+
+## Performance Optimization
+
+### Enable BBR Congestion Control
+
+```bash
+# Enable BBR
+echo "net.core.default_qdisc=fq" | sudo tee -a /etc/sysctl.conf
+echo "net.ipv4.tcp_congestion_control=bbr" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+```
+
+### Optimize Node.js
+
+```bash
+# Set environment variables in systemd service
+Environment=NODE_OPTIONS=--max-old-space-size=512 --optimize-for-size
+```
+
+### Configure Kernel Parameters
+
+```bash
+# Increase file descriptors
+echo "fs.file-max = 100000" | sudo tee -a /etc/sysctl.conf
+echo "* soft nofile 65536" | sudo tee -a /etc/security/limits.conf
+echo "* hard nofile 65536" | sudo tee -a /etc/security/limits.conf
+```

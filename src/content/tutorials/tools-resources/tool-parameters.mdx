@@ -1,0 +1,184 @@
+# Advanced Tool Parameters
+
+Tools become more powerful when they accept parameters. This section covers how to define complex tool schemas with validation and optional parameters.
+
+## Parameter Schema Basics
+
+Tool parameters are defined using JSON Schema, which provides:
+- Type validation
+- Required fields
+- Default values
+- Custom validation rules
+- Descriptions for AI understanding
+
+## Defining Parameters
+
+```typescript
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      {
+        name: 'calculate',
+        description: 'Perform mathematical calculations',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            operation: {
+              type: 'string',
+              enum: ['add', 'subtract', 'multiply', 'divide'],
+              description: 'The mathematical operation to perform',
+            },
+            a: {
+              type: 'number',
+              description: 'First number',
+            },
+            b: {
+              type: 'number',
+              description: 'Second number',
+            },
+          },
+          required: ['operation', 'a', 'b'],
+        },
+      },
+    ],
+  };
+});
+```
+
+## Required vs Optional Parameters
+
+Mark parameters as `required` to ensure they're always provided:
+
+```typescript
+inputSchema: {
+  type: 'object',
+  properties: {
+    // Required parameters
+    url: {
+      type: 'string',
+      description: 'The URL to fetch',
+    },
+    // Optional parameters with defaults
+    method: {
+      type: 'string',
+      enum: ['GET', 'POST', 'PUT', 'DELETE'],
+      description: 'HTTP method',
+      default: 'GET',
+    },
+    timeout: {
+      type: 'number',
+      description: 'Request timeout in seconds',
+      default: 30,
+    },
+  },
+  required: ['url'], // Only url is required
+}
+```
+
+## Complex Types
+
+### Arrays
+
+```typescript
+properties: {
+  tags: {
+    type: 'array',
+    items: {
+      type: 'string',
+    },
+    description: 'List of tags to filter by',
+  },
+}
+```
+
+### Objects
+
+```typescript
+properties: {
+  options: {
+    type: 'object',
+    properties: {
+      recursive: { type: 'boolean' },
+      followSymlinks: { type: 'boolean' },
+    },
+    description: 'Search options',
+  },
+}
+```
+
+### Enums
+
+```typescript
+properties: {
+  format: {
+    type: 'string',
+    enum: ['json', 'xml', 'csv'],
+    description: 'Output format',
+  },
+}
+```
+
+## Handling Parameters
+
+```typescript
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === 'search') {
+    const { query, filters, limit = 10 } = args as {
+      query: string;
+      filters?: { type?: string; date?: string };
+      limit?: number;
+    };
+
+    // Use the parameters
+    const results = await performSearch(query, filters, limit);
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify(results, null, 2),
+      }],
+    };
+  }
+
+  throw new Error(`Unknown tool: ${name}`);
+});
+```
+
+<Callout type="info">
+**AI-Friendly Descriptions**: Good descriptions help AI clients understand when and how to use your tools correctly.
+</Callout>
+
+## Validation Best Practices
+
+1. **Use specific types** - `number` instead of letting anything pass
+2. **Provide enums** - For limited sets of valid values
+3. **Add descriptions** - Explain what each parameter does
+4. **Set sensible defaults** - Make common cases easy
+5. **Use patterns** - For string validation with regex
+
+```typescript
+properties: {
+  email: {
+    type: 'string',
+    format: 'email',
+    description: 'User email address',
+  },
+  port: {
+    type: 'number',
+    minimum: 1,
+    maximum: 65535,
+    description: 'Network port number',
+  },
+  path: {
+    type: 'string',
+    pattern: '^/.*',
+    description: 'URL path (must start with /)',
+  },
+}
+```
+
+## Next Steps
+
+Let's explore error handling to make your tools more robust.

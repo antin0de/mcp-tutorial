@@ -1,0 +1,78 @@
+# JSON-RPC Communication
+
+JSON-RPC 2.0 is the foundation of MCP communication. Understanding how it works is essential for debugging and building robust servers.
+
+## What is JSON-RPC?
+
+JSON-RPC is a lightweight remote procedure call (RPC) protocol encoded in JSON. It's transport-agnostic, meaning it can work over stdio, HTTP, WebSocket, or any other communication channel.
+
+## Request-Response Model
+
+Every JSON-RPC exchange follows a simple pattern:
+
+1. **Client sends a request** with a method name and parameters
+2. **Server processes the request** and returns a result or error
+3. **Each request has a unique ID** to match responses
+
+### Request Format
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/list",
+  "id": 1
+}
+```
+
+### Response Format
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "tools": [
+      {
+        "name": "get_weather",
+        "description": "Get current weather"
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+## MCP-Specific Methods
+
+MCP defines several JSON-RPC methods that your server must implement:
+
+- **`initialize`** - Handshake between client and server
+- **`tools/list`** - List available tools
+- **`tools/call`** - Execute a tool
+- **`resources/list`** - List available resources
+- **`resources/read`** - Read a resource's contents
+- **`prompts/list`** - List available prompts
+- **`prompts/get`** - Get a prompt template
+
+<Callout type="info">
+**Streaming Responses**: MCP supports streaming responses for long-running operations using the same JSON-RPC protocol over stdio.
+</Callout>
+
+## Error Handling
+
+Errors are also returned as JSON-RPC responses:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32601,
+    "message": "Method not found",
+    "data": { "details": "The method 'unknown_method' does not exist" }
+  },
+  "id": 1
+}
+```
+
+## Next Steps
+
+Now that you understand JSON-RPC, let's explore resources—the first major MCP concept.

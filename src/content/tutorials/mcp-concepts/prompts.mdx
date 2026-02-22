@@ -1,0 +1,777 @@
+---
+title: "MCP Prompts"
+description: "Understanding how MCP manages and executes prompt templates for consistent AI interactions"
+---
+
+# MCP Prompts
+
+## Introduction to Prompts
+
+**Prompts** in MCP are reusable templates that define how AI systems should interact with users and respond to specific scenarios. While Resources expose data and Tools enable actions, Prompts provide structured conversation templates that ensure consistent, high-quality interactions across different AI platforms.
+
+### What is an MCP Prompt?
+
+An MCP Prompt is a structured template that:
+
+- Defines conversation flows
+- Provides contextual information
+- Includes response guidelines
+- Manages multi-turn interactions
+- Ensures consistency across AI platforms
+
+```typescript
+// Example Prompt definition
+const prompt = {
+  name: "code-review",
+  description: "Review code for best practices and potential issues",
+  template: `You are an expert code reviewer. Please review the following code:
+
+\`\`\`{{language}}
+{{code}}
+\`\`\`
+
+Please provide:
+1. Overall code quality assessment
+2. Specific issues found
+3. Improvement suggestions
+4. Security considerations
+
+Format your response in markdown with clear sections.`,
+  variables: ["language", "code"],
+  context: {
+    programmingLanguages: ["JavaScript", "Python", "TypeScript", "Java"]
+  }
+};
+```
+
+## Prompt Architecture
+
+### Prompt Components
+
+```typescript
+interface Prompt {
+  name: string;                    // Unique identifier
+  description: string;           // Human-readable description
+  template: string;              // Template content with variables
+  variables: string[];          // Template variables that can be substituted
+  context?: PromptContext;       // Additional context information
+  constraints?: PromptConstraints; // Response constraints
+}
+
+interface PromptContext {
+  // Additional information that helps the AI understand the scenario
+  examples?: Example[];
+  guidelines?: string[];
+  rules?: string[];
+}
+
+interface PromptConstraints {
+  // Constraints on the AI's response
+  maxLength?: number;
+  format?: "text" | "markdown" | "json";
+  tone?: "formal" | "casual" | "technical";
+  requiredSections?: string[];
+}
+```
+
+### Variable Substitution
+
+Prompts support variable substitution using `{{variable}}` syntax:
+
+```typescript
+const substitutedPrompt = substituteVariables(prompt, {
+  language: "JavaScript",
+  code: "function add(a, b) { return a + b; }"
+});
+
+// Result:
+// "You are an expert code reviewer. Please review the following code:
+//
+// \`\`\`JavaScript
+// function add(a, b) { return a + b; }
+// \`\`\`
+//
+// Please provide:
+// 1. Overall code quality assessment
+// 2. Specific issues found
+// 3. Improvement suggestions
+// 4. Security considerations
+//
+// Format your response in markdown with clear sections."
+```
+
+## Types of Prompts
+
+### 1. Static Prompts
+
+Static prompts have fixed content without variables:
+
+```typescript
+const staticPrompt = {
+  name: "welcome-message",
+  description: "Welcome message for new users",
+  template: `Welcome to our application! Thank you for choosing our service.
+
+Here's what you can do next:
+1. Complete your profile setup
+2. Explore the documentation
+3. Try some example prompts
+4. Contact support if you need help
+
+Is there anything specific you'd like to know about?`
+};
+```
+
+**Use Cases:**
+- Welcome messages
+- Error responses
+- Help text
+- Static instructions
+
+### 2. Dynamic Prompts
+
+Dynamic prompts use variables to generate context-specific responses:
+
+```typescript
+const dynamicPrompt = {
+  name: "generate-report",
+  description: "Generate a comprehensive report",
+  template: `Generate a {{reportType}} report for {{timePeriod}} based on the following data:
+
+{{dataSummary}}
+
+Key metrics to include:
+- Performance indicators
+- Trends analysis
+- Recommendations
+- Next steps
+
+Use {{tone}} tone and format as {{format}}.`,
+  variables: ["reportType", "timePeriod", "dataSummary", "tone", "format"],
+  constraints: {
+    format: "markdown",
+    maxLength: 2000,
+    requiredSections: ["Overview", "Metrics", "Recommendations"]
+  }
+};
+```
+
+**Use Cases:**
+- Report generation
+- Personalized responses
+- Context-aware advice
+- Customized documentation
+
+### 3. Multi-Turn Prompts
+
+Multi-turn prompts manage conversational flows:
+
+```typescript
+const multiTurnPrompt = {
+  name: "customer-support",
+  description: "Customer support conversation flow",
+  turns: [
+    {
+      step: 1,
+      role: "assistant",
+      template: "Hello! I'm here to help you with {{issue}}. Could you tell me more about what's happening?"
+    },
+    {
+      step: 2,
+      role: "user",
+      expectedInput: "User describes the issue in detail"
+    },
+    {
+      step: 3,
+      role: "assistant",
+      template: "Thank you for those details. I understand you're experiencing {{specificIssue}}. Let me help you resolve this.",
+      context: {
+        possibleSolutions: ["solution1", "solution2", "solution3"]
+      }
+    },
+    {
+      step: 4,
+      role: "user",
+      expectedInput: "User chooses a solution or provides more information"
+    }
+  ]
+};
+```
+
+**Use Cases:**
+- Customer support workflows
+- Multi-step wizards
+- Interview processes
+- Educational interactions
+
+### 4. Conditional Prompts
+
+Conditional prompts adapt based on user context or input:
+
+```typescript
+const conditionalPrompt = {
+  name: "code-generation",
+  description: "Generate code based on user requirements",
+  template: "{{#if userLevel === 'beginner'}}
+Generate simple, well-commented {{language}} code for {{purpose}} with detailed explanations.
+{{/if}}
+
+{{#if userLevel === 'intermediate'}}
+Generate idiomatic {{language}} code for {{purpose}} following best practices.
+Include error handling and performance considerations.
+{{/if}}
+
+{{#if userLevel === 'expert'}}
+Generate optimized {{language}} code for {{purpose}}.
+Include advanced features, design patterns, and comprehensive documentation.
+{{/if}}",
+  variables: ["userLevel", "language", "purpose"],
+  conditions: {
+    userLevel: ["beginner", "intermediate", "expert"]
+  }
+};
+```
+
+**Use Cases:**
+- Adaptive tutorials
+- Role-based responses
+- Context-aware help
+- Progressive disclosure
+
+## Implementing Prompts
+
+### Basic Prompt Server
+
+```typescript
+import { MCPServer } from "@modelcontextprotocol/sdk/server/index.js";
+
+class PromptServer extends MCPServer {
+  private prompts = new Map<string, Prompt>();
+
+  constructor() {
+    super({
+      name: "prompt-server",
+      version: "1.0.0"
+    });
+
+    // Register prompts
+    this.registerPrompt({
+      name: "code-review",
+      description: "Review code for best practices and potential issues",
+      template: `You are an expert code reviewer. Please review the following code:
+
+\`\`\`{{language}}
+{{code}}
+\`\`\`
+
+Please provide:
+1. Overall code quality assessment
+2. Specific issues found
+3. Improvement suggestions
+4. Security considerations
+
+Format your response in markdown with clear sections.`,
+      variables: ["language", "code"]
+    });
+
+    this.registerPrompt({
+      name: "debug-assistance",
+      description: "Help debug technical problems",
+      template: `I need help debugging a {{problemType}} issue. Here are the details:
+
+{{context}}
+
+The error message is: {{errorMessage}}
+
+What steps should I take to resolve this issue?`,
+      variables: ["problemType", "context", "errorMessage"]
+    });
+  }
+
+  async getPrompt(name: string, variables?: Record<string, any>): Promise<PromptResult> {
+    const prompt = this.prompts.get(name);
+    if (!prompt) {
+      throw new Error(`Prompt not found: ${name}`);
+    }
+
+    // Substitute variables if provided
+    const template = this.substituteVariables(prompt.template, variables || {});
+
+    return {
+      name,
+      description: prompt.description,
+      template,
+      variables: prompt.variables,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  private substituteVariables(template: string, variables: Record<string, any>): string {
+    return template.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+      return variables[varName] !== undefined ? variables[varName] : match;
+    });
+  }
+}
+```
+
+### Advanced Prompt Management
+
+```typescript
+class AdvancedPromptServer extends MCPServer {
+  constructor() {
+    super({
+      name: "advanced-prompts",
+      version: "1.0.0"
+    });
+
+    this.setupPromptHierarchy();
+    this.setupPromptCache();
+    this.setupVersionControl();
+  }
+
+  private setupPromptHierarchy() {
+    // Organize prompts in a hierarchical structure
+    this.promptCategories = {
+      "development": {
+        "code-review": this.createCodeReviewPrompt(),
+        "debug-assistance": this.createDebugPrompt(),
+        "documentation": this.createDocumentationPrompt()
+      },
+      "business": {
+        "report-generation": this.createReportPrompt(),
+        "analysis": this.createAnalysisPrompt(),
+        "presentation": this.createPresentationPrompt()
+      },
+      "general": {
+        "help": this.createHelpPrompt(),
+        "feedback": this.createFeedbackPrompt()
+      }
+    };
+  }
+
+  async getPromptByCategory(category: string, name: string, variables?: Record<string, any>): Promise<PromptResult> {
+    const categoryPrompts = this.promptCategories[category];
+    if (!categoryPrompts) {
+      throw new Error(`Category not found: ${category}`);
+    }
+
+    const prompt = categoryPrompts[name];
+    if (!prompt) {
+      throw new Error(`Prompt not found: ${category}.${name}`);
+    }
+
+    // Apply version control if needed
+    const versionedPrompt = this.getVersionedPrompt(prompt, variables?.version);
+
+    // Apply constraints
+    this.validatePromptConstraints(versionedPrompt, variables);
+
+    return {
+      ...versionedPrompt,
+      template: this.substituteVariables(versionedPrompt.template, variables || {})
+    };
+  }
+
+  private getVersionedPrompt(prompt: Prompt, version?: string): Prompt {
+    // Implement version control logic
+    if (version) {
+      return this.promptVersions.get(`${prompt.name}@${version}`) || prompt;
+    }
+    return prompt;
+  }
+}
+```
+
+## Prompt Templates and Variables
+
+### Handlebars-style Templating
+
+```typescript
+class HandlebarsPromptServer extends MCPServer {
+  private handlebars = require('handlebars');
+
+  constructor() {
+    super({
+      name: "handlebars-prompts",
+      version: "1.0.0"
+    });
+
+    // Register helpers
+    this.handlebars.registerHelper('json', (context) => {
+      return JSON.stringify(context, null, 2);
+    });
+
+    this.handlebars.registerHelper('formatDate', (date) => {
+      return new Date(date).toLocaleDateString();
+    });
+  }
+
+  async renderPrompt(name: string, context: Record<string, any>): Promise<string> {
+    const prompt = this.prompts.get(name);
+    if (!prompt) {
+      throw new Error(`Prompt not found: ${name}`);
+    }
+
+    // Compile template
+    const compiled = this.handlebars.compile(prompt.template);
+
+    // Render with context
+    return compiled(context);
+  }
+}
+```
+
+### Template Validation
+
+```typescript
+class ValidatedPromptServer extends MCPServer {
+  async validateTemplate(prompt: Prompt, variables: Record<string, any>): Promise<ValidationResult> {
+    const errors = [];
+
+    // Check all required variables are provided
+    for (const requiredVar of prompt.variables) {
+      if (variables[requiredVar] === undefined) {
+        errors.push(`Missing required variable: ${requiredVar}`);
+      }
+    }
+
+    // Check variable types
+    for (const [varName, value] of Object.entries(variables)) {
+      const expectedType = this.getExpectedVariableType(prompt, varName);
+      if (expectedType && !this.validateType(value, expectedType)) {
+        errors.push(`Invalid type for variable ${varName}: expected ${expectedType}`);
+      }
+    }
+
+    // Validate template syntax
+    const syntaxErrors = this.validateTemplateSyntax(prompt.template);
+    errors.push(...syntaxErrors);
+
+    return {
+      valid: errors.length === 0,
+      errors: errors
+    };
+  }
+
+  private getExpectedVariableType(prompt: Prompt, variableName: string): string | null {
+    // Implement type detection logic based on variable usage patterns
+    // or explicit type annotations in the prompt definition
+    return null;
+  }
+
+  private validateType(value: any, expectedType: string): boolean {
+    switch (expectedType) {
+      case "string":
+        return typeof value === "string";
+      case "number":
+        return typeof value === "number";
+      case "boolean":
+        return typeof value === "boolean";
+      case "array":
+        return Array.isArray(value);
+      case "object":
+        return typeof value === "object" && value !== null;
+      default:
+        return true;
+    }
+  }
+}
+```
+
+## Prompt Security and Best Practices
+
+### Input Sanitation
+
+```typescript
+class SecurePromptServer extends MCPServer {
+  async renderPrompt(name: string, context: Record<string, any>): Promise<string> {
+    const prompt = this.prompts.get(name);
+    if (!prompt) {
+      throw new Error(`Prompt not found: ${name}`);
+    }
+
+    // Sanitize context inputs
+    const sanitizedContext = this.sanitizeContext(context);
+
+    // Validate template safety
+    this.validateTemplateSafety(prompt.template);
+
+    // Render prompt
+    return this.substituteVariables(prompt.template, sanitizedContext);
+  }
+
+  private sanitizeContext(context: Record<string, any>): Record<string, any> {
+    const sanitized = {};
+
+    for (const [key, value] of Object.entries(context)) {
+      if (typeof value === "string") {
+        // Escape HTML characters
+        sanitized[key] = this.escapeHtml(value);
+        // Remove potentially dangerous patterns
+        sanitized[key] = this.removeDangerousPatterns(sanitized[key]);
+      } else {
+        sanitized[key] = value;
+      }
+    }
+
+    return sanitized;
+  }
+
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  private removeDangerousPatterns(text: string): string {
+    // Remove potentially dangerous template patterns
+    return text
+      .replace(/\{\{.*?\}\}/g, "") // Remove template injections
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "") // Remove script tags
+      .replace(/javascript:/gi, ""); // Remove javascript protocol
+  }
+}
+```
+
+### Prompt Testing
+
+```typescript
+class TestablePromptServer extends MCPServer {
+  private testCases = new Map<string, PromptTestCase[]>();
+
+  addPromptTest(promptName: string, test: PromptTestCase) {
+    if (!this.testCases.has(promptName)) {
+      this.testCases.set(promptName, []);
+    }
+    this.testCases.get(promptName)!.push(test);
+  }
+
+  async runPromptTests(promptName: string): Promise<TestResult[]> {
+    const tests = this.testCases.get(promptName) || [];
+    const results: TestResult[] = [];
+
+    for (const test of tests) {
+      try {
+        const result = await this.renderPrompt(promptName, test.context);
+        const passed = this.validateResult(result, test.expectedOutput);
+
+        results.push({
+          test,
+          passed,
+          result,
+          error: passed ? null : "Output validation failed"
+        });
+      } catch (error) {
+        results.push({
+          test,
+          passed: false,
+          result: null,
+          error: error.message
+        });
+      }
+    }
+
+    return results;
+  }
+
+  private validateResult(actual: string, expected: string | TestValidator): boolean {
+    if (typeof expected === "string") {
+      return actual.includes(expected);
+    }
+
+    // Handle custom validators
+    if (expected.type === "regex") {
+      return new RegExp(expected.pattern).test(actual);
+    }
+
+    if (expected.type === "length") {
+      return actual.length >= expected.minLength && actual.length <= expected.maxLength;
+    }
+
+    return false;
+  }
+}
+```
+
+## Real-World Prompt Examples
+
+### 1. Documentation Generation
+
+```typescript
+const documentationPrompt = {
+  name: "generate-docs",
+  description: "Generate API documentation from code",
+  template: `Generate comprehensive API documentation for the following {{language}} code:
+
+\`\`\`{{language}}
+{{code}}
+\`\`\`
+
+Documentation requirements:
+- Include method signatures and descriptions
+- Document parameters with types and descriptions
+- Provide usage examples for each method
+- Include error handling information
+- Add performance considerations
+- List dependencies and requirements
+
+Format the documentation as follows:
+
+# API Documentation
+
+## [Method Name]
+**Description:** [Brief description]
+
+**Parameters:**
+- [parameterName] ([type]): [description]
+
+**Returns:** [return type] - [description]
+
+**Example:**
+\`\`\`{{language}}
+{{exampleUsage}}
+\`\`\`
+
+**Error Handling:**
+[Describe potential errors and how to handle them]
+
+**Performance:**
+[Performance considerations and optimization tips]
+
+{{#if hasDependencies}}
+**Dependencies:**
+{{dependencies}}
+{{/if}}`,
+  variables: ["language", "code", "exampleUsage", "hasDependencies", "dependencies"],
+  constraints: {
+    format: "markdown",
+    maxLength: 5000,
+    requiredSections: ["Method Name", "Description", "Parameters", "Returns", "Example"]
+  }
+};
+```
+
+### 2. Code Optimization Assistant
+
+```typescript
+const optimizationPrompt = {
+  name: "optimize-code",
+  description: "Optimize code for performance and maintainability",
+  template: `I need help optimizing this {{language}} code for better {{optimizationType}}:
+
+\`\`\`{{language}}
+{{code}}
+\`\`\`
+
+Current issues I've identified:
+{{currentIssues}}
+
+Please provide:
+1. Specific optimization suggestions
+2. Refactored code examples
+3. Performance impact analysis
+4. Maintainability improvements
+5. Potential side effects to watch for
+
+Use technical language but provide clear explanations.
+
+Optimization focus areas:
+{{#if performance}}
+- Performance bottlenecks
+- Algorithm efficiency
+- Memory usage
+- I/O operations
+{{/if}}
+
+{{#if readability}}
+- Code structure
+- Variable naming
+- Code comments
+- Error handling
+{{/if}}
+
+{{#if scalability}}
+- Scalability considerations
+- Resource management
+- Concurrency issues
+{{/if}}`,
+  variables: ["language", "code", "optimizationType", "currentIssues", "performance", "readability", "scalability"],
+  constraints: {
+    format: "markdown",
+    maxLength: 3000,
+    tone: "technical"
+  }
+};
+```
+
+### 3. Data Analysis Assistant
+
+```typescript
+const analysisPrompt = {
+  name: "analyze-data",
+  description: "Analyze data and provide insights",
+  template: `Analyze the following {{dataType}} data and provide insights:
+
+{{dataSummary}}
+
+{{#if trends}}
+**Trends observed:**
+{{trends}}
+{{/if}}
+
+{{#if outliers}}
+**Notable outliers:**
+{{outliers}}
+{{/if}}
+
+{{#if patterns}}
+**Patterns identified:**
+{{patterns}}
+{{/if}}
+
+Please provide:
+1. Key findings and insights
+2. Statistical summary
+3. Recommendations for further analysis
+4. Potential business implications
+5. Data quality assessment
+
+Analysis depth: {{depth}} (basic/intermediate/advanced)
+
+Time period: {{timePeriod}}
+
+Additional context: {{additionalContext}}`,
+  variables: ["dataType", "dataSummary", "trends", "outliers", "patterns", "depth", "timePeriod", "additionalContext"],
+  constraints: {
+    format: "markdown",
+    maxLength: 4000,
+    requiredSections: ["Key Findings", "Statistical Summary", "Recommendations"]
+  }
+};
+```
+
+
+
+## Module Summary
+
+Congratulations! You've completed the MCP Concepts module. Let's review what we've learned:
+
+### Key Concepts Covered
+
+1. **What is MCP**: Understanding the Model Context Protocol as a standardized way for AI systems to communicate with external data and functionality.
+
+2. **Architecture**: The client-server model with three layers (AI Platform, MCP Client, MCP Server) and multiple transport mechanisms (stdio, HTTP, WebSocket).
+
+3. **Resources**: Structured data exposure with static, dynamic, and virtual resources, complete with security and caching considerations.
+
+4. **Tools**: Function execution capabilities with proper schema design, security measures, and composition patterns.
+
+5. **Prompts**: Conversation templates with variable substitution, conditional logic, and multi-turn interactions for consistent AI responses.
+
+### Next Steps
+
+Now that you understand the fundamental concepts, you're ready to move on to implementation. The [Prerequisites](/tutorials/prerequisites) module will help you set up your development environment, and then you can start building your own MCP servers!
+

@@ -1,0 +1,347 @@
+---
+title: "Testing with MCP Inspector"
+description: "Test your MCP server using MCP Inspector"
+section: 4
+estimatedTime: 20
+---
+
+# Section 4: Testing with MCP Inspector
+
+Before connecting our MCP server to Claude Desktop or Cursor, it's crucial to test that it works correctly. In this section, we'll use MCP Inspector, a powerful tool for testing MCP servers.
+
+## What is MCP Inspector?
+
+MCP Inspector is a testing tool that allows you to:
+
+- **Send MCP requests** to your server
+- **Inspect responses** in real-time
+- **Debug issues** before connecting to clients
+- **Validate server behavior** according to the MCP specification
+
+## Step 1: Install MCP Inspector
+
+First, let's install MCP Inspector globally:
+
+```bash
+npm install -g @modelcontextprotocol/inspector
+```
+
+## Step 2: Start Your Server
+
+Make sure your server is built and running:
+
+```bash
+npm run build
+npm run start
+```
+
+You should see:
+
+```
+MCP Server running with Echo and Calculator tools
+```
+
+## Step 3: Run MCP Inspector
+
+In a separate terminal, start MCP Inspector:
+
+```bash
+mcp inspector
+```
+
+MCP Inspector will automatically detect and connect to your running server!
+
+## Step 4: Test the Initialize Request
+
+MCP Inspector will first send an `initialize` request. Let's see what our server responds with:
+
+The initialize request should have this structure:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "inspector",
+      "version": "1.0.0"
+    }
+  }
+}
+```
+
+Our server should respond with:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "capabilities": {
+      "tools": {}
+    },
+    "serverInfo": {
+      "name": "basic-mcp-server",
+      "version": "1.0.0"
+    }
+  }
+}
+```
+
+## Step 5: Test Tools List
+
+Now, let's request the list of available tools:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/list",
+  "params": {}
+}
+```
+
+Expected response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "tools": [
+      {
+        "name": "echo",
+        "description": "Echo back the provided message",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "description": "The message to echo back",
+              "type": "string"
+            }
+          },
+          "required": ["message"]
+        }
+      },
+      {
+        "name": "calculator",
+        "description": "Perform basic arithmetic operations",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "description": "First number",
+              "type": "number"
+            },
+            "b": {
+              "description": "Second number",
+              "type": "number"
+            },
+            "operation": {
+              "description": "The operation to perform",
+ "type": "string",
+              "enum": ["add", "subtract", "multiply", "divide"]
+            }
+          },
+          "required": ["operation", "a", "b"]
+        }
+      }
+    ]
+  }
+}
+```
+
+## Step 6: Test Echo Tool
+
+Let's test the echo tool with a sample message:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "echo",
+    "arguments": {
+      "message": "Hello, MCP World!"
+    }
+  }
+}
+```
+
+Expected response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "result": "Hello, MCP World!"
+  }
+}
+```
+
+## Step 7: Test Calculator Tool
+
+Now, let's test the calculator tool with different operations:
+
+### Addition:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "calculator",
+    "arguments": {
+      "operation": "add",
+      "a": 5,
+      "b": 3
+    }
+  }
+}
+```
+
+Expected response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "result": 8
+  }
+}
+```
+
+### Division by zero (error case):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tools/call",
+  "params": {
+    "name": "calculator",
+    "arguments": {
+      "operation": "divide",
+      "a": 10,
+      "b": 0
+    }
+  }
+}
+```
+
+Expected error response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "error": {
+    "code": -32603,
+    "message": "Internal error",
+    "data": "Division by zero"
+  }
+}
+```
+
+## Step 8: Test Error Cases
+
+Let's also test some error cases:
+
+### Unknown tool:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "method": "tools/call",
+  "params": {
+    "name": "unknown_tool",
+    "arguments": {}
+  }
+}
+```
+
+Expected error response:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "error": {
+    "code": -32601,
+    "message": "Unknown method: tools/call",
+    "data": "Unknown tool: unknown_tool"
+  }
+}
+```
+
+### Missing required parameter:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "echo",
+    "arguments": {}
+  }
+}
+```
+
+This should show that the client needs to provide the required "message" parameter.
+
+## Step 9: Common Issues and Debugging
+
+Here are some common issues you might encounter:
+
+### Issue 1: Server Not Connecting
+- **Problem**: MCP Inspector can't find your server
+- **Solution**: Make sure your server is running and listening via stdio
+
+### Issue 2: JSON-RPC Errors
+- **Problem**: Invalid JSON or malformed requests
+- **Solution**: Check your request format carefully in MCP Inspector
+
+### Issue 3: Tool Execution Errors
+- **Problem**: Tools throw unexpected errors
+- **Solution**: Use MCP Inspector to see the exact error messages
+
+### Issue 4: Missing Dependencies
+- **Problem**: Module not found errors
+- **Solution**: Ensure all dependencies are installed with `npm install`
+
+---
+
+
+
+**Question**: How can you test division by zero in your calculator tool using MCP Inspector?
+
+**Answer**: Send a tools/call request with operation "divide", a=10, b=0. The server should respond with an error message "Division by zero".
+
+---
+
+## Summary
+
+In this section, we've successfully:
+
+- ✅ Installed and used MCP Inspector
+- ✅ Tested the initialize request and response
+- ✅ Verified the tools list is correct
+- ✅ Tested both Echo and Calculator tools
+- ✅ Tested error handling cases
+- ✅ Learned common debugging techniques
+
+Our MCP server is now thoroughly tested and ready to be connected to a real client!
+
+## Next Steps
+
+In the final section, we'll connect our MCP server to Claude Desktop or Cursor to make it fully functional.
+---

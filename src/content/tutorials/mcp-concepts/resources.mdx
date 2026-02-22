@@ -1,0 +1,656 @@
+---
+title: "MCP Resources"
+description: "Understanding how MCP exposes and manages data through Resources"
+---
+
+# MCP Resources
+
+## Introduction to Resources
+
+**Resources** are the foundation of MCP's data exposure mechanism. They represent structured data that AI systems can access, query, and interact with. Think of Resources as "smart folders" that contain data with specific types, descriptions, and access patterns.
+
+### What is a Resource?
+
+A Resource is a defined data source that an AI system can access through MCP. Each Resource has:
+
+- **Name**: Unique identifier for the resource
+- **Description**: Human-readable explanation of what the resource contains
+- **URI**: Uniform Resource Identifier (like a file path or database query)
+- **MIME Type**: Format of the data (JSON, text, CSV, etc.)
+- **Content**: The actual data or reference to where the data can be found
+
+```typescript
+// Example Resource definition
+const resource = {
+  uri: "file:///documents/project-status.json",
+  name: "project-status",
+  description: "Current status of all active projects",
+  mimeType: "application/json",
+  content: {
+    projects: [
+      {
+        id: "proj-001",
+        name: "Website Redesign",
+        status: "in-progress",
+        progress: 75
+      }
+    ]
+  }
+};
+```
+
+## Types of Resources
+
+### 1. Static Resources
+
+Static Resources contain fixed data that doesn't change frequently.
+
+```typescript
+// Static resource example
+const staticResource = {
+  uri: "company-info/organization-chart.json",
+  name: "organization-chart",
+  description: "Company organizational structure",
+  mimeType: "application/json",
+  content: {
+    ceo: "Sarah Johnson",
+    departments: [
+      { name: "Engineering", head: "Mike Chen" },
+      { name: "Marketing", head: "Lisa Wang" }
+    ]
+  }
+};
+```
+
+**Use Cases:**
+- Company directories
+- Configuration files
+- Reference data
+- Documentation
+
+### 2. Dynamic Resources
+
+Dynamic Resources generate data on-demand based on current state.
+
+```typescript
+// Dynamic resource generator
+class DynamicResourceManager {
+  async getLiveSystemMetrics() {
+    return {
+      uri: "metrics/system-performance",
+      name: "system-performance",
+      description: "Real-time system performance metrics",
+      mimeType: "application/json",
+      content: await this.getCurrentMetrics()
+    };
+  }
+
+  private async getCurrentMetrics() {
+    // Fetch real-time metrics
+    return {
+      cpu: await this.getCPUUsage(),
+      memory: await this.getMemoryUsage(),
+      disk: await this.getDiskUsage(),
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+```
+
+**Use Cases:**
+- Live data feeds
+- Real-time metrics
+- Transaction data
+- User activity logs
+
+### 3. Virtual Resources
+
+Virtual Resources represent data that exists elsewhere but is exposed through MCP.
+
+```typescript
+// Virtual resource example
+const virtualResource = {
+  uri: "database/customers/active",
+  name: "active-customers",
+  description: "List of currently active customers",
+  mimeType: "application/json",
+  content: {
+    query: "SELECT * FROM customers WHERE status = 'active'",
+    source: "postgresql://localhost:5432/myapp"
+  }
+};
+```
+
+**Use Cases:**
+- Database views
+- API endpoints
+- External service data
+- Computed aggregations
+
+## Resource Management
+
+### Resource Registry
+
+A Resource Registry manages all available resources and their metadata:
+
+```typescript
+class ResourceRegistry {
+  private resources = new Map<string, Resource>();
+
+  addResource(resource: Resource) {
+    this.resources.set(resource.uri, resource);
+  }
+
+  getResource(uri: string): Resource | undefined {
+    return this.resources.get(uri);
+  }
+
+  listResources(): Resource[] {
+    return Array.from(this.resources.values());
+  }
+
+  searchResources(query: string): Resource[] {
+    return this.listResources().filter(resource =>
+      resource.description.includes(query) ||
+      resource.name.includes(query)
+    );
+  }
+}
+```
+
+### Resource Lifecycle
+
+Resources go through several stages:
+
+```
+Definition → Registration → Access → Update → Deprecation → Removal
+```
+
+## Implementing Resources
+
+### Basic Resource Server
+
+```typescript
+import { MCPServer } from "@modelcontextprotocol/sdk/server/index.js";
+
+class FileResourceServer extends MCPServer {
+  private resources = new Map<string, Resource>();
+
+  constructor() {
+    super({
+      name: "filesystem-resources",
+      version: "1.0.0"
+    });
+
+    // Register file resources
+    this.registerResources();
+  }
+
+  private registerResources() {
+    // Add a text resource
+    this.resources.set("documents/notes.txt", {
+      uri: "file:///documents/notes.txt",
+      name: "personal-notes",
+      description: "Personal notes and reminders",
+      mimeType: "text/plain",
+      contents: "Remember to review the project proposal\nMeeting with team at 3 PM"
+    });
+
+    // Add a JSON resource
+    this.resources.set("data/config.json", {
+      uri: "file:///data/config.json",
+      name: "application-config",
+      description: "Application configuration settings",
+      mimeType: "application/json",
+      contents: {
+        database: {
+          host: "localhost",
+          port: 5432,
+          name: "myapp"
+        },
+        features: {
+          analytics: true,
+          notifications: false
+        }
+      }
+    });
+  }
+
+  async handleResourceRead(uri: string): Promise<Resource> {
+    const resource = this.resources.get(uri);
+
+    if (!resource) {
+      throw new Error(`Resource not found: ${uri}`);
+    }
+
+    return resource;
+  }
+}
+```
+
+### Resource Server with Dynamic Content
+
+```typescript
+class DatabaseResourceServer extends MCPServer {
+  private dbConnection;
+
+  constructor() {
+    super({
+      name: "database-resources",
+      version: "1.0.0"
+    });
+  }
+
+  async initializeResources() {
+    // Register dynamic database resources
+    this.registerResource({
+      uri: "database/users",
+      name: "user-directory",
+      description: "All registered users",
+      mimeType: "application/json",
+      async load() {
+        return this.dbConnection.query("SELECT id, name, email FROM users");
+      }
+    });
+
+    this.registerResource({
+      uri: "database/orders/recent",
+      name: "recent-orders",
+      description: "Orders from the last 30 days",
+      mimeType: "application/json",
+      async load() {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        return this.dbConnection.query(
+          "SELECT * FROM orders WHERE created_at >= $1",
+          [thirtyDaysAgo]
+        );
+      }
+    });
+  }
+
+  async handleResourceRead(uri: string): Promise<Resource> {
+    const resource = this.resources.get(uri);
+
+    if (!resource) {
+      throw new Error(`Resource not found: ${uri}`);
+    }
+
+    // For dynamic resources, call the load function
+    if (typeof resource.load === 'function') {
+      return {
+        ...resource,
+        contents: await resource.load()
+      };
+    }
+
+    return resource;
+  }
+}
+```
+
+## Resource Content Formats
+
+### JSON Resources
+
+The most common format for structured data:
+
+```json
+{
+  "uri": "data/projects.json",
+  "name": "project-list",
+  "description": "List of all projects",
+  "mimeType": "application/json",
+  "contents": [
+    {
+      "id": "proj-001",
+      "title": "Website Redesign",
+      "status": "active",
+      "progress": 75,
+      "team": ["alice", "bob", "charlie"]
+    }
+  ]
+}
+```
+
+### Text Resources
+
+For plain text content:
+
+```json
+{
+  "uri": "documents/readme.txt",
+  "name": "readme-documentation",
+  "description": "Project README documentation",
+  "mimeType": "text/plain",
+  "contents": "# Project README\n\nThis is a sample project..."
+}
+```
+
+### CSV Resources
+
+For tabular data:
+
+```json
+{
+  "uri": "data/sales.csv",
+  "name": "sales-data",
+  "description": "Monthly sales figures",
+  "mimeType": "text/csv",
+  "contents": "Date,Product,Amount,Region\n2024-01,Laptop,1200,North\n2024-01,Tablet,800,South"
+}
+```
+
+### Binary Resources
+
+For images, documents, etc.:
+
+```json
+{
+  "uri": "assets/logo.png",
+  "name": "company-logo",
+  "description": "Company logo image",
+  "mimeType": "image/png",
+  "contents": "base64-encoded-image-data-here"
+}
+```
+
+## Resource Access Patterns
+
+### 1. Direct Access
+
+Access resources directly by their URI:
+
+```typescript
+async accessDirectResource() {
+  const resource = await client.readResource({
+    uri: "documents/project-status.json"
+  });
+  return resource.contents;
+}
+```
+
+### 2. List and Filter
+
+List available resources and filter by criteria:
+
+```typescript
+async searchResources() {
+  // List all resources
+  const allResources = await client.listResources();
+
+  // Filter by name
+  const projectResources = allResources.filter(r =>
+    r.name.includes("project")
+  );
+
+  // Filter by MIME type
+  const jsonResources = allResources.filter(r =>
+    r.mimeType === "application/json"
+  );
+}
+```
+
+### 3. Hierarchical Access
+
+Organize resources in a hierarchical structure:
+
+```
+resources/
+├── documents/
+│   ├── project-1/
+│   │   ├── status.json
+│   │   └── notes.txt
+│   └── project-2/
+│       ├── status.json
+│       └── notes.txt
+├── data/
+│   ├── config.json
+│   └── metrics.json
+└── assets/
+    └── images/
+        ├── logo.png
+        └── banner.jpg
+```
+
+## Resource Security
+
+### Access Control
+
+Implement access control for sensitive resources:
+
+```typescript
+class SecureResourceServer extends MCPServer {
+  async handleResourceRead(uri: string, user: User): Promise<Resource> {
+    // Check if user has permission to access resource
+    if (!this.checkResourcePermission(uri, user)) {
+      throw new Error("Access denied");
+    }
+
+    return super.handleResourceRead(uri);
+  }
+
+  private checkResourcePermission(uri: string, user: User): boolean {
+    // Implement your permission logic
+    const resource = this.resources.get(uri);
+
+    if (resource && resource.accessLevel === "public") {
+      return true;
+    }
+
+    return user.role === "admin" ||
+           resource?.allowedUsers.includes(user.id);
+  }
+}
+```
+
+### Data Validation
+
+Validate resource content before returning it:
+
+```typescript
+class ValidatedResourceServer extends MCPServer {
+  async handleResourceRead(uri: string): Promise<Resource> {
+    const resource = await super.handleResourceRead(uri);
+
+    // Validate resource content
+    const validation = this.validateResource(resource);
+    if (!validation.valid) {
+      throw new Error(`Resource validation failed: ${validation.error}`);
+    }
+
+    return resource;
+  }
+
+  private validateResource(resource: Resource): ValidationResult {
+    // Check required fields
+    if (!resource.uri || !resource.name || !resource.mimeType) {
+      return {
+        valid: false,
+        error: "Missing required resource fields"
+      };
+    }
+
+    // Validate MIME type
+    if (!this.isValidMimeType(resource.mimeType)) {
+      return {
+        valid: false,
+        error: "Invalid MIME type"
+      };
+    }
+
+    return { valid: true };
+  }
+}
+```
+
+## Resource Best Practices
+
+### 1. Descriptive Naming
+
+```typescript
+// Good
+{
+  uri: "data/sales/2024-q1.json",
+  name: "q1-sales-report-2024",
+  description: "Sales report for Q1 2024 including all regions"
+}
+
+// Bad
+{
+  uri: "file1.json",
+  name: "data",
+  description: "some data"
+}
+```
+
+### 2. Consistent Structure
+
+```typescript
+// Consistent structure across similar resources
+const projectResources = [
+  {
+    uri: "projects/website-redesign",
+    name: "website-redesign-status",
+    description: "Current status of the website redesign project",
+    mimeType: "application/json",
+    contents: {
+      id: "website-redesign",
+      title: "Website Redesign",
+      status: "in-progress",
+      progress: 75,
+      lastUpdated: "2024-01-15T10:00:00Z"
+    }
+  },
+  {
+    uri: "projects/mobile-app",
+    name: "mobile-app-status",
+    description: "Current status of the mobile app development project",
+    mimeType: "application/json",
+    contents: {
+      id: "mobile-app",
+      title: "Mobile App",
+      status: "planning",
+      progress: 25,
+      lastUpdated: "2024-01-14T15:30:00Z"
+    }
+  }
+];
+```
+
+### 3. Efficient Caching
+
+```typescript
+class CachedResourceServer extends MCPServer {
+  private cache = new Map<string, { resource: Resource; timestamp: number }>();
+  private cacheTTL = 60000; // 1 minute
+
+  async handleResourceRead(uri: string): Promise<Resource> {
+    // Check cache first
+    const cached = this.cache.get(uri);
+    if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
+      return cached.resource;
+    }
+
+    // Fetch fresh data
+    const resource = await super.handleResourceRead(uri);
+
+    // Update cache
+    this.cache.set(uri, { resource, timestamp: Date.now() });
+
+    return resource;
+  }
+}
+```
+
+## Real-World Examples
+
+### 1. File System Resource Server
+
+```typescript
+class FileSystemResourceServer extends MCPServer {
+  async initializeResources() {
+    // Watch for file changes
+    this.watchDirectory("./documents");
+
+    // Register static resources
+    this.registerResource({
+      uri: "documents/README.md",
+      name: "project-readme",
+      description: "Project README documentation",
+      mimeType: "text/markdown",
+      contents: await this.readFile("./documents/README.md")
+    });
+  }
+
+  private async watchDirectory(path: string) {
+    const watcher = fs.watch(path, async (eventType, filename) => {
+      if (eventType === 'change') {
+        // Update resource when file changes
+        const uri = `documents/${filename}`;
+        const resource = {
+          uri,
+          name: filename.replace(/\.[^/.]+$/, ""),
+          description: `Updated ${filename} document`,
+          mimeType: this.getMimeType(filename),
+          contents: await this.readFile(`${path}/${filename}`)
+        };
+
+        this.updateResource(uri, resource);
+      }
+    });
+  }
+}
+```
+
+### 2. API Integration Resource Server
+
+```typescript
+class APIResourceServer extends MCPServer {
+  constructor(private apiClient: APIClient) {
+    super({
+      name: "api-integration",
+      version: "1.0.0"
+    });
+  }
+
+  async initializeResources() {
+    // Register API-based resources
+    this.registerResource({
+      uri: "api/users",
+      name: "user-directory",
+      description: "User directory from external API",
+      mimeType: "application/json",
+      async load() {
+        return this.apiClient.get("/users");
+      }
+    });
+
+    this.registerResource({
+      uri: "api/products",
+      name: "product-catalog",
+      description: "Product catalog with inventory",
+      mimeType: "application/json",
+      async load() {
+        return this.apiClient.get("/products");
+      }
+    });
+
+    this.registerResource({
+      uri: "api/orders/pending",
+      name: "pending-orders",
+      description: "Orders that need processing",
+      mimeType: "application/json",
+      async load() {
+        return this.apiClient.get("/orders", {
+          params: { status: "pending" }
+        });
+      }
+    });
+  }
+}
+```
+
+
+

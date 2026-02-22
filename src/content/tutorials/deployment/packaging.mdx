@@ -1,0 +1,57 @@
+---
+title: "Deployment"
+description: "Deploy MCP servers locally and to cloud platforms with Docker and production-ready configurations"
+module: "deployment"
+order: 5
+estimatedTime: 60
+difficulty: "advanced"
+---
+
+# Deployment
+
+Welcome to the Deployment module! In this advanced tutorial, you'll learn how to deploy MCP servers from your local machine to production environments using various deployment strategies. We'll cover everything from local development setups to cloud deployments with monitoring and security considerations.
+
+## What You'll Learn
+
+In this module, we'll cover:
+
+- **Local Options**: Different ways to run MCP servers locally (stdio, HTTP, Docker)
+- **Docker Deployment**: Containerizing MCP servers with Docker and Docker Compose
+- **Azure Deployment**: Full deployment pipeline to Azure Container Apps
+- **VPS Deployment**: Setting up MCP servers on a VPS with nginx and systemd
+- **Production Deployment**: Scaling, monitoring, security, and best practices
+
+## Deployment Scenarios
+
+```
+Local Development       Docker Container        Cloud Deployment
+┌─────────────┐        ┌─────────────┐        ┌─────────────┐
+│   Laptop    │        │  Docker     │        │ Azure       │
+│   Desktop   │◄─────►│  Compose   │◄─────►│  Container   │
+│   Local PC  │        │  Local      │        │  Apps       │
+└─────────────┘        └─────────────┘        └─────────────┘
+       │                     │                        │
+       └─────────────────────┼────────────────────────┘
+                             │
+                       Production
+                   ┌─────────────┐
+                   │  VPS with   │
+                   │  nginx      │
+                   │  Systemd    │
+                   └─────────────┘
+```
+
+## Prerequisites
+
+Before starting this module, ensure you have:
+
+✅ **Completed the MCP tutorials** and built your first server
+✅ **Node.js 18+** installed and configured
+✅ **Basic knowledge** of Docker and containerization
+✅ **Azure account** (for Azure deployment)
+✅ **Linux VPS** (for VPS deployment)
+
+## What's Next?
+
+Let's begin with local deployment options to understand the different ways you can run MCP servers!
+

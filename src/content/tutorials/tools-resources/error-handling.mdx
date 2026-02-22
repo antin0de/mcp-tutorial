@@ -1,0 +1,209 @@
+# Error Handling
+
+Robust error handling is crucial for production MCP servers. This section covers how to implement proper error handling and provide meaningful error messages.
+
+## Error Response Format
+
+MCP uses JSON-RPC error responses:
+
+```typescript
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": { "details": "Parameter 'url' is required" }
+  },
+  "id": 1
+}
+```
+
+## Standard Error Codes
+
+| Code | Name | Description |
+|------|------|-------------|
+| -32700 | Parse error | Invalid JSON |
+| -32600 | Invalid Request | JSON-RPC request is invalid |
+| -32601 | Method not found | Method doesn't exist |
+| -32602 | Invalid params | Invalid method parameters |
+| -32603 | Internal error | Internal server error |
+
+## Throwing Errors
+
+In MCP SDK, throw errors from request handlers:
+
+```typescript
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === 'fetch_url') {
+    const { url } = args as { url?: string };
+
+    if (!url) {
+      throw new Error('URL parameter is required');
+    }
+
+    try {
+      const response = await fetch(url);
+      return {
+        content: [{
+          type: 'text',
+          text: await response.text(),
+        }],
+      };
+    } catch (error) {
+      throw new Error(`Failed to fetch URL: ${error}`);
+    }
+  }
+});
+```
+
+## Custom Error Classes
+
+For better error handling, create custom error classes:
+
+```typescript
+class McpError extends Error {
+  constructor(
+    public code: number,
+    message: string,
+    public data?: unknown
+  ) {
+    super(message);
+    this.name = 'McpError';
+  }
+}
+
+// Usage
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === 'divide') {
+    const { a, b } = args as { a?: number; b?: number };
+
+    if (typeof a !== 'number' || typeof b !== 'number') {
+      throw new McpError(-32602, 'Invalid params', {
+        details: 'Both "a" and "b" must be numbers',
+      });
+    }
+
+    if (b === 0) {
+      throw new McpError(-32603, 'Division by zero', {
+        operation: 'divide',
+        divisor: b,
+      });
+    }
+
+    return {
+      content: [{
+        type: 'text',
+        text: String(a / b),
+      }],
+    };
+  }
+});
+```
+
+## Validation Errors
+
+Validate parameters early and provide clear messages:
+
+```typescript
+function validateFetchUrl(args: unknown): { url: string; timeout?: number } {
+  if (!args || typeof args !== 'object') {
+    throw new McpError(-32602, 'Invalid params', {
+      details: 'Arguments must be an object',
+    });
+  }
+
+  const { url, timeout } = args as { url?: string; timeout?: number };
+
+  if (!url) {
+    throw new McpError(-32602, 'Invalid params', {
+      details: 'Missing required parameter: url',
+    });
+  }
+
+  if (typeof url !== 'string') {
+    throw new McpError(-32602, 'Invalid params', {
+      details: 'Parameter "url" must be a string',
+      parameter: 'url',
+      received: typeof url,
+    });
+  }
+
+  if (timeout !== undefined && (typeof timeout !== 'number' || timeout < 0)) {
+    throw new McpError(-32602, 'Invalid params', {
+      details: 'Parameter "timeout" must be a positive number',
+      parameter: 'timeout',
+      received: timeout,
+    });
+  }
+
+  return { url, timeout };
+}
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === 'fetch_url') {
+    const params = validateFetchUrl(args);
+    // ... proceed with validated params
+  }
+});
+```
+
+<Callout type="warning">
+**Error Messages for AI**: Clear error messages help AI clients understand what went wrong and how to fix their requests.
+</Callout>
+
+## Graceful Degradation
+
+Handle failures gracefully when possible:
+
+```typescript
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+
+  try {
+    const data = await fetchDataFromAPI(uri);
+    return {
+      contents: [{
+        uri,
+        mimeType: 'application/json',
+        text: JSON.stringify(data, null, 2),
+      }],
+    };
+  } catch (error) {
+    // Return error info as resource content instead of throwing
+    return {
+      contents: [{
+        uri,
+        mimeType: 'text/plain',
+        text: `Error fetching data: ${error}`,
+      }],
+    };
+  }
+});
+```
+
+## Logging Errors
+
+Always log errors for debugging:
+
+```typescript
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  try {
+    // ... tool execution
+  } catch (error) {
+    console.error(`Error executing tool ${name}:`, error);
+    throw error;
+  }
+});
+```
+
+## Next Steps
+
+Let's look at handling asynchronous operations and long-running tasks.
